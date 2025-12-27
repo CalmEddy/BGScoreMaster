@@ -41,9 +41,29 @@ export const COMMON_VARIABLE_TYPES: Record<string, VariableDefinition[]> = {
     { id: "markers", name: "Markers", type: "number", defaultValue: 0, min: 0, icon: "📍", category: "Tokens" },
   ],
   Sets: [
-    { id: "collections", name: "Collections", type: "number", defaultValue: 0, min: 0, icon: "📦", category: "Sets" },
-    { id: "combinations", name: "Combinations", type: "number", defaultValue: 0, min: 0, icon: "🔗", category: "Sets" },
-    { id: "groups", name: "Groups", type: "number", defaultValue: 0, min: 0, icon: "👥", category: "Sets" },
+    { 
+      id: "wood_resources_set", 
+      name: "Wood Resources", 
+      type: "set", 
+      setType: "identical",
+      setElementTemplate: { id: "wood_element", name: "Wood", type: "resource", icon: "🪵" },
+      defaultValue: 0, 
+      min: 0, 
+      icon: "🪵", 
+      category: "Sets",
+      description: "A set containing identical wood resources"
+    },
+    { 
+      id: "treasure_cards_set", 
+      name: "Treasure Cards", 
+      type: "set", 
+      setType: "elements",
+      setElements: [], // Will be populated by user when adding elements
+      defaultValue: 0, 
+      icon: "💎", 
+      category: "Sets",
+      description: "A set containing different treasure card types (gold, emerald, ruby, etc.)"
+    },
   ],
   Time: [
     { id: "turns", name: "Turns", type: "number", defaultValue: 0, min: 0, icon: "🔄", category: "Time" },

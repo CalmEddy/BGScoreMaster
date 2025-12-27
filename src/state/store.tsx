@@ -50,6 +50,87 @@ const reducer = (state: AppState, action: AppAction): AppState => {
     }
     case "session/activate":
       return { ...state, activeSessionId: action.payload };
+    case "session/remove": {
+      const { sessionId } = action.payload;
+      const session = state.sessions[sessionId];
+      if (!session) return state;
+
+      // Remove all related data
+      const playersToRemove = session.playerIds || [];
+      const categoriesToRemove = session.categoryIds || [];
+      const roundsToRemove = session.roundIds || [];
+      const rulesToRemove = session.ruleIds || [];
+      const variableValuesToRemove = session.variableValueIds || [];
+
+      // Filter out players
+      const remainingPlayers = state.players
+        ? Object.fromEntries(
+            Object.entries(state.players).filter(([id]) => !playersToRemove.includes(id))
+          )
+        : {};
+
+      // Filter out categories
+      const remainingCategories = state.categories
+        ? Object.fromEntries(
+            Object.entries(state.categories).filter(([id]) => !categoriesToRemove.includes(id))
+          )
+        : {};
+
+      // Filter out rounds
+      const remainingRounds = state.rounds
+        ? Object.fromEntries(
+            Object.entries(state.rounds).filter(([id]) => !roundsToRemove.includes(id))
+          )
+        : {};
+
+      // Filter out rules
+      const remainingRules = state.rules
+        ? Object.fromEntries(
+            Object.entries(state.rules).filter(([id]) => !rulesToRemove.includes(id))
+          )
+        : {};
+
+      // Filter out entries for this session
+      const remainingEntries = state.entries
+        ? Object.fromEntries(
+            Object.entries(state.entries).filter(([, entry]) => entry.sessionId !== sessionId)
+          )
+        : {};
+
+      // Filter out variable values
+      const remainingVariableValues = state.variableValues
+        ? Object.fromEntries(
+            Object.entries(state.variableValues).filter(([id]) => !variableValuesToRemove.includes(id))
+          )
+        : {};
+
+      // Filter out variable history for removed variable values
+      const remainingVariableHistory = state.variableHistory
+        ? Object.fromEntries(
+            Object.entries(state.variableHistory).filter(([id]) => !variableValuesToRemove.includes(id))
+          )
+        : undefined;
+
+      // Remove session
+      const { [sessionId]: _, ...remainingSessions } = state.sessions;
+
+      // Clear activeSessionId if it was the deleted session
+      const newActiveSessionId =
+        state.activeSessionId === sessionId ? undefined : state.activeSessionId;
+
+      return {
+        ...state,
+        sessions: remainingSessions,
+        players: remainingPlayers,
+        categories: remainingCategories,
+        rounds: remainingRounds,
+        rules: remainingRules,
+        entries: remainingEntries,
+        variableValues: remainingVariableValues,
+        variableHistory: remainingVariableHistory,
+        activeSessionId: newActiveSessionId,
+      };
+    }
     case "player/add": {
       const player = action.payload;
       return {
@@ -127,13 +208,21 @@ const reducer = (state: AppState, action: AppAction): AppState => {
     }
     case "entry/add": {
       const entry = action.payload;
+      const session = state.sessions[entry.sessionId];
       return {
         ...state,
-        entries: { ...state.entries, [entry.id]: entry },
+        entries: { ...(state.entries || {}), [entry.id]: entry },
+        sessions: session
+          ? {
+              ...state.sessions,
+              [entry.sessionId]: updateSessionTimestamp(session),
+            }
+          : state.sessions,
       };
     }
     case "entry/remove": {
       const { entryId } = action.payload;
+      if (!state.entries) return state;
       const { [entryId]: _, ...restEntries } = state.entries;
       return { ...state, entries: restEntries };
     }
@@ -179,22 +268,31 @@ const reducer = (state: AppState, action: AppAction): AppState => {
     }
     case "template/create": {
       const template = action.payload;
-      return {
+      const newState = {
         ...state,
         templates: { ...state.templates, [template.id]: template },
       };
+      // Save templates immediately to ensure persistence
+      saveTemplates(newState.templates);
+      return newState;
     }
     case "template/update": {
       const template = action.payload;
-      return {
+      const newState = {
         ...state,
         templates: { ...state.templates, [template.id]: template },
       };
+      // Save templates immediately to ensure persistence
+      saveTemplates(newState.templates);
+      return newState;
     }
     case "template/remove": {
       const { templateId } = action.payload;
       const { [templateId]: _, ...restTemplates } = state.templates;
-      return { ...state, templates: restTemplates };
+      const newState = { ...state, templates: restTemplates };
+      // Save templates immediately to ensure persistence
+      saveTemplates(newState.templates);
+      return newState;
     }
     case "template/duplicate": {
       const { templateId, newId, newName } = action.payload;
@@ -207,10 +305,13 @@ const reducer = (state: AppState, action: AppAction): AppState => {
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
-      return {
+      const newState = {
         ...state,
         templates: { ...state.templates, [newId]: duplicated },
       };
+      // Save templates immediately to ensure persistence
+      saveTemplates(newState.templates);
+      return newState;
     }
     case "variable/set": {
       const variable = action.payload;
@@ -336,6 +437,16 @@ const reducer = (state: AppState, action: AppAction): AppState => {
         },
       };
     }
+    case "variable/recompute": {
+      const { variableValueId } = action.payload;
+      const variable = state.variableValues[variableValueId];
+      if (!variable) return state;
+
+      // Recompute will be handled by the evaluation system
+      // This action just marks that recomputation is needed
+      // The actual recomputation happens in the evaluation functions
+      return state;
+    }
     case "onboarding/complete": {
       return {
         ...state,
@@ -388,7 +499,8 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         saved.rules = {};
       }
       // Merge templates from separate storage and initialize starters
-      const allTemplates = { ...savedTemplates, ...(saved.templates || {}) };
+      // Prioritize templates from separate storage (newer), but include any from main state
+      const allTemplates = { ...(saved.templates || {}), ...savedTemplates };
       saved.templates = initializeStarterTemplates(allTemplates);
       // Ensure sessions have ruleIds
       Object.values(saved.sessions || {}).forEach((session) => {

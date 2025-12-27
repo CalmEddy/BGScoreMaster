@@ -41,7 +41,7 @@ const FormulaEditor = ({
   const availableVariables = variables || [];
 
   const suggestions = [
-    ...availableCategories.map((cat) => `{${cat.id}}`),
+    ...availableCategories.map((cat) => `{${cat.name}}`),
     ...availableVariables.map((v) => `{${v.name}}`),
     ...["max(", "min(", "sum(", "avg(", "round(", "abs(", "floor(", "ceil("],
     ...["+", "-", "*", "/", "(", ")"],
@@ -53,15 +53,16 @@ const FormulaEditor = ({
   };
 
   const insertSuggestion = (suggestion: string) => {
-    const cursorPos = (document.activeElement as HTMLTextAreaElement)?.selectionStart || value.length;
+    const activeElement = document.activeElement;
+    const cursorPos = (activeElement instanceof HTMLTextAreaElement) ? activeElement.selectionStart || value.length : value.length;
     const before = value.slice(0, cursorPos);
     const after = value.slice(cursorPos);
     const newValue = before + suggestion + after;
     handleInput(newValue);
     // Set cursor position after inserted text
     setTimeout(() => {
-      const textarea = document.activeElement as HTMLTextAreaElement;
-      if (textarea) {
+      const textarea = document.activeElement;
+      if (textarea instanceof HTMLTextAreaElement && typeof textarea.setSelectionRange === 'function') {
         const newPos = cursorPos + suggestion.length;
         textarea.setSelectionRange(newPos, newPos);
         textarea.focus();
@@ -71,8 +72,13 @@ const FormulaEditor = ({
 
   const formulaVars = getFormulaVariables(value);
   const referencedCategories = formulaVars
-    .map((id) => categories[id])
-    .filter(Boolean);
+    .map((nameOrId) => {
+      // Try to find by name first (user-friendly), then by ID (backward compatibility)
+      return Object.values(categories).find(
+        (cat) => cat.name.toLowerCase() === nameOrId.toLowerCase() || cat.id === nameOrId
+      );
+    })
+    .filter(Boolean) as Category[];
   
   const referencedVariables = formulaVars
     .map((name) => availableVariables.find((v) => v.name.toLowerCase() === name.toLowerCase() || v.id === name))
@@ -157,9 +163,11 @@ const FormulaEditor = ({
       <div style={{ marginTop: "12px", fontSize: "0.875rem", color: "#6b7280" }}>
         <strong>Available functions:</strong> max(), min(), sum(), avg(), round(), abs(), floor(), ceil()
         <br />
+        <strong>Special functions:</strong> state({`{variableName}`}), owns({`{variableName}`}, playerId?), round(), phase(), if(condition, trueValue, falseValue)
+        <br />
         <strong>Operators:</strong> +, -, *, /, ^ (power)
         <br />
-        <strong>Variables:</strong> Use <code>{`{categoryId}`}</code> for categories or <code>{`{variableName}`}</code> for template variables
+        <strong>Variables:</strong> Use <code>{`{categoryName}`}</code> for categories or <code>{`{variableName}`}</code> for template variables
         {availableVariables.length > 0 && (
           <>
             <br />

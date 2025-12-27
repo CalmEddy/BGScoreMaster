@@ -130,7 +130,18 @@ const CategoryTemplateEditor: React.FC<CategoryTemplateEditorProps> = ({
             <FormulaEditor
               formula={formula}
               onChange={setFormula}
-              categories={{}}
+              categories={allCategories.reduce((acc, cat) => {
+                // Convert CategoryTemplate to Category-like object for FormulaEditor
+                acc[cat.id] = {
+                  id: cat.id,
+                  sessionId: "",
+                  name: cat.name,
+                  sortOrder: cat.sortOrder,
+                  displayType: cat.displayType,
+                } as any;
+                return acc;
+              }, {} as Record<string, any>)}
+              categoryId={category.id}
               variables={variables}
             />
           </div>

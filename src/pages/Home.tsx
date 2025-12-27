@@ -10,6 +10,7 @@ const Home = ({
   onImportState,
   onShowHelp,
   onOpenBuilder,
+  onDeleteSession,
 }: {
   state: AppState;
   onNewSession: () => void;
@@ -17,6 +18,7 @@ const Home = ({
   onImportState: (next: AppState) => void;
   onShowHelp?: () => void;
   onOpenBuilder?: () => void;
+  onDeleteSession?: (sessionId: string) => void;
 }) => {
   const sessions = useMemo(
     () =>
@@ -68,6 +70,19 @@ const Home = ({
         </div>
       </div>
       <div className="container stack">
+        <section className="card stack">
+          <div className="card-title">Scoring-only assistant</div>
+          <p style={{ fontSize: "0.95rem", color: "#4b5563" }}>
+            Universal Score Keeper is built for fast, accurate score tracking. It does not manage turn order,
+            enforce rules, or adjudicate gameplay. You supply the scoring data; the app calculates totals from
+            your template formulas and adjustments.
+          </p>
+          <ul style={{ margin: 0, paddingLeft: "18px", color: "#6b7280" }}>
+            <li>Create or open a session with players and a scoring template.</li>
+            <li>Enter variables and scoring entries each round or turn as needed.</li>
+            <li>Use manual adjustments or overrides when you need to correct totals.</li>
+          </ul>
+        </section>
         <section className="card stack" data-onboarding="sessions">
           <div className="card-title">Sessions</div>
           {sessions.length === 0 ? (
@@ -84,20 +99,50 @@ const Home = ({
               {sessions.map((session) => {
                 const playerCount = session.playerIds.length;
                 return (
-                  <button
+                  <div
                     key={session.id}
                     className="card"
-                    onClick={() => onOpenSession(session.id)}
                     style={{ textAlign: "left" }}
                   >
-                    <div className="inline" style={{ justifyContent: "space-between" }}>
-                      <strong>{session.title}</strong>
-                      <span className="badge">{playerCount} players</span>
-                    </div>
-                    <small>
-                      Updated {new Date(session.updatedAt).toLocaleString()}
-                    </small>
-                  </button>
+                    <button
+                      onClick={() => onOpenSession(session.id)}
+                      style={{ 
+                        width: "100%", 
+                        textAlign: "left", 
+                        background: "none", 
+                        border: "none", 
+                        padding: 0,
+                        cursor: "pointer"
+                      }}
+                    >
+                      <div className="inline" style={{ justifyContent: "space-between" }}>
+                        <strong>{session.title}</strong>
+                        <span className="badge">{playerCount} players</span>
+                      </div>
+                      <small>
+                        Updated {new Date(session.updatedAt).toLocaleString()}
+                      </small>
+                    </button>
+                    {onDeleteSession && (
+                      <button
+                        className="button ghost"
+                        style={{ 
+                          marginTop: "8px", 
+                          color: "#e11d48",
+                          fontSize: "0.875rem"
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm(`Are you sure you want to delete "${session.title}"? This action cannot be undone.`)) {
+                            onDeleteSession(session.id);
+                          }
+                        }}
+                        title="Delete session"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
                 );
               })}
             </div>

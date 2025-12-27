@@ -21,11 +21,11 @@ function evaluateCondition(
 
   switch (condition.type) {
     case "total":
-      leftValue = computePlayerTotal(state, sessionId, playerId);
+      leftValue = computePlayerTotal(state, sessionId, playerId, currentRoundId);
       break;
     case "category":
       if (!condition.categoryId) return false;
-      const categoryTotals = computeCategoryTotals(state, sessionId, playerId);
+      const categoryTotals = computeCategoryTotals(state, sessionId, playerId, currentRoundId);
       // Check if it's a category or a variable
       if (categoryTotals[condition.categoryId] !== undefined) {
         leftValue = categoryTotals[condition.categoryId] ?? 0;
@@ -100,8 +100,8 @@ function applyRuleAction(
 ): ScoreEntry | null {
   const { playerId, sessionId, state, currentRoundId } = context;
 
-  const categoryTotals = computeCategoryTotals(state, sessionId, playerId);
-  const currentTotal = computePlayerTotal(state, sessionId, playerId);
+  const categoryTotals = computeCategoryTotals(state, sessionId, playerId, currentRoundId);
+  const currentTotal = computePlayerTotal(state, sessionId, playerId, currentRoundId);
   const targetCategoryTotal = rule.action.targetCategoryId
     ? categoryTotals[rule.action.targetCategoryId] ?? 0
     : currentTotal;

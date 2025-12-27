@@ -1,6 +1,7 @@
-import { useMemo } from "react";
-import { computeCategoryTotals, formatCategoryName } from "../lib/calculations";
-import { AppAction, AppState, Session } from "../state/types";
+import { useMemo, useState } from "react";
+import { computeCategoryTotals, computePlayerTotal, formatCategoryName } from "../lib/calculations";
+import { createId } from "../lib/id";
+import { AppAction, AppState, ScoreEntry, Session } from "../state/types";
 import { sortEntries } from "../state/store";
 
 const PlayerDetail = ({
@@ -27,6 +28,32 @@ const PlayerDetail = ({
     [state.entries, session.id, playerId]
   );
   const totalsByCategory = computeCategoryTotals(state, session.id, playerId);
+  const currentTotal = useMemo(
+    () => computePlayerTotal(state, session.id, playerId),
+    [state, session.id, playerId]
+  );
+  const [adjustmentValue, setAdjustmentValue] = useState("0");
+  const [overrideTotalValue, setOverrideTotalValue] = useState("");
+  const [adjustmentError, setAdjustmentError] = useState<string | null>(null);
+
+  const applyAdjustment = (value: number, note: string) => {
+    if (Number.isNaN(value)) return;
+    if (value < 0 && !session.settings.allowNegative) {
+      setAdjustmentError("Negative adjustments are disabled for this session.");
+      return;
+    }
+    const entry: ScoreEntry = {
+      id: createId(),
+      sessionId: session.id,
+      playerId,
+      createdAt: Date.now(),
+      value,
+      note,
+      source: "manual",
+    };
+    dispatch({ type: "entry/add", payload: entry });
+    setAdjustmentError(null);
+  };
 
   return (
     <div className="app">
@@ -38,6 +65,63 @@ const PlayerDetail = ({
         <span />
       </div>
       <div className="container stack">
+        <div className="card stack">
+          <div className="card-title">Adjustments</div>
+          <p style={{ fontSize: "0.875rem", color: "#6b7280" }}>
+            Apply a manual adjustment or override the calculated total. Overrides are saved as an adjustment entry.
+          </p>
+          <div className="inline" style={{ gap: "12px", flexWrap: "wrap" }}>
+            <div style={{ minWidth: "180px" }}>
+              <label className="label">Adjustment (+/-)</label>
+              <input
+                className="input"
+                type="number"
+                value={adjustmentValue}
+                onChange={(event) => setAdjustmentValue(event.target.value)}
+              />
+            </div>
+            <div className="inline" style={{ alignItems: "flex-end" }}>
+              <button
+                className="button secondary"
+                onClick={() => {
+                  const numericValue = Number(adjustmentValue);
+                  applyAdjustment(numericValue, "Manual adjustment");
+                }}
+              >
+                Apply adjustment
+              </button>
+            </div>
+          </div>
+          <div className="inline" style={{ gap: "12px", flexWrap: "wrap" }}>
+            <div style={{ minWidth: "180px" }}>
+              <label className="label">Override total</label>
+              <input
+                className="input"
+                type="number"
+                placeholder={`Current: ${currentTotal}`}
+                value={overrideTotalValue}
+                onChange={(event) => setOverrideTotalValue(event.target.value)}
+              />
+            </div>
+            <div className="inline" style={{ alignItems: "flex-end" }}>
+              <button
+                className="button secondary"
+                onClick={() => {
+                  const desiredTotal = Number(overrideTotalValue);
+                  if (Number.isNaN(desiredTotal)) return;
+                  const delta = desiredTotal - currentTotal;
+                  applyAdjustment(delta, `Override total to ${desiredTotal}`);
+                }}
+                disabled={!overrideTotalValue.trim()}
+              >
+                Apply override
+              </button>
+            </div>
+          </div>
+          {adjustmentError && (
+            <p style={{ color: "#e11d48" }}>{adjustmentError}</p>
+          )}
+        </div>
         {Object.keys(totalsByCategory).length > 0 && (
           <div className="card stack">
             <div className="card-title">Totals by category</div>

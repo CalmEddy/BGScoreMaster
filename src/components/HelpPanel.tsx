@@ -12,6 +12,25 @@ const HelpPanel = ({ onClose }: { onClose: () => void }) => {
 
   const sections: HelpSection[] = [
     {
+      id: "scope",
+      title: "Scope & Focus",
+      content: (
+        <div>
+          <h4>Scoring Only</h4>
+          <p>
+            This app is a scoring assistant. It does not manage turn order, enforce game rules,
+            or act as an arbiter. Use it to track variables, apply formulas, and adjust totals.
+          </p>
+          <h4>What You Control</h4>
+          <ul>
+            <li>Which sessions and templates are used</li>
+            <li>Which variables and categories are shown</li>
+            <li>Manual adjustments or overrides for corrections</li>
+          </ul>
+        </div>
+      ),
+    },
+    {
       id: "quick-start",
       title: "Quick Start",
       content: (
@@ -55,15 +74,15 @@ const HelpPanel = ({ onClose }: { onClose: () => void }) => {
           <h4>Formula-Based Scoring</h4>
           <p>Categories can use formulas instead of simple sums. Formulas support:</p>
           <ul>
-            <li><strong>Variables:</strong> Use <code>{`{categoryId}`}</code> to reference category totals</li>
+            <li><strong>Variables:</strong> Use <code>{`{categoryName}`}</code> to reference category totals by name</li>
             <li><strong>Math operations:</strong> +, -, *, /, ()</li>
             <li><strong>Functions:</strong> max(), min(), sum(), avg(), round()</li>
           </ul>
           <h4>Examples</h4>
           <ul>
-            <li><code>{`{victoryPoints} + {bonusPoints}`}</code> - Simple addition</li>
-            <li><code>{`{territory} * 2 + {resources} * 0.5`}</code> - Weighted calculation</li>
-            <li><code>{`max({category1}, {category2}) + 10`}</code> - Using functions</li>
+            <li><code>{`{Victory Points} + {Bonus Points}`}</code> - Simple addition using category names</li>
+            <li><code>{`{Territory} * 2 + {Resources} * 0.5`}</code> - Weighted calculation</li>
+            <li><code>{`max({Category 1}, {Category 2}) + 10`}</code> - Using functions</li>
           </ul>
         </div>
       ),
@@ -74,7 +93,7 @@ const HelpPanel = ({ onClose }: { onClose: () => void }) => {
       content: (
         <div>
           <h4>Conditional Scoring</h4>
-          <p>Create rules that automatically apply scores based on conditions.</p>
+          <p>Create rules that automatically apply score adjustments based on conditions. These are scoring helpers only.</p>
           <h4>Rule Examples</h4>
           <ul>
             <li>"If player has 10+ territories, add 5 bonus points"</li>
@@ -124,6 +143,7 @@ const HelpPanel = ({ onClose }: { onClose: () => void }) => {
             <li>Export/Import sessions to share or backup</li>
             <li>Use formulas for complex calculations</li>
             <li>Create rules for automatic scoring</li>
+            <li>Use adjustment entries to override totals</li>
             <li>Nest categories for hierarchical scoring</li>
           </ul>
         </div>

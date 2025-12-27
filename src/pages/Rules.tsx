@@ -59,13 +59,13 @@ const Rules = ({
         <div className="card stack">
           <div className="card-title">Automatic Scoring Rules</div>
           <p style={{ fontSize: "0.875rem", color: "#6b7280" }}>
-            Rules automatically apply scores when conditions are met. Rules are evaluated after each score entry.
+            Rules automatically apply score adjustments when conditions are met. Rules are evaluated after each score entry.
           </p>
           {rules.length === 0 ? (
             <div style={{ textAlign: "center", padding: "24px" }}>
               <p style={{ marginBottom: "12px" }}>No rules yet.</p>
               <p style={{ fontSize: "0.875rem", color: "#6b7280", marginBottom: "16px" }}>
-                Rules automatically apply scores when conditions are met.
+                Rules automatically apply score adjustments when conditions are met.
               </p>
               <button className="button" onClick={() => setCreatingRule(true)}>
                 Create Your First Rule

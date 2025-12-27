@@ -14,12 +14,14 @@ const Setup = ({
   dispatch,
   templateId,
   state,
+  onSelectTemplate,
 }: {
   onBack: () => void;
   onCreate: (sessionId: string) => void;
   dispatch: React.Dispatch<AppAction>;
   templateId?: string;
   state?: AppState;
+  onSelectTemplate?: () => void;
 }) => {
   const template = templateId && state ? state.templates[templateId] : undefined;
 
@@ -91,6 +93,10 @@ const Setup = ({
           roundsEnabled,
           scoreDirection,
           allowNegative,
+          showRoundControls: true,
+          showSessionVariables: true,
+          showPlayerVariables: true,
+          showQuickAdd: true,
         },
         playerIds: [],
         categoryIds: [],
@@ -157,17 +163,50 @@ const Setup = ({
         <span />
       </div>
       <div className="container stack">
-        {template && (
-          <div className="card stack">
-            <div className="card-title">Template: {template.name}</div>
-            {template.description && (
-              <p style={{ fontSize: "0.875rem", color: "#6b7280" }}>{template.description}</p>
-            )}
-            <div style={{ fontSize: "0.875rem", color: "#6b7280" }}>
-              {template.categoryTemplates?.length || 0} categories • {template.ruleTemplates?.length || 0} rules • {template.variableDefinitions?.length || 0} variables
+        <div className="card stack">
+          <div className="card-title">Template</div>
+          {template ? (
+            <div>
+              <div className="inline" style={{ gap: "8px", marginBottom: "8px", alignItems: "center" }}>
+                {template.icon && <span style={{ fontSize: "1.5rem" }}>{template.icon}</span>}
+                <div style={{ flex: 1 }}>
+                  <strong>{template.name}</strong>
+                  <span className="badge" style={{ marginLeft: "8px" }}>{template.gameType}</span>
+                </div>
+              </div>
+              {template.description && (
+                <p style={{ fontSize: "0.875rem", color: "#6b7280", margin: "8px 0" }}>
+                  {template.description}
+                </p>
+              )}
+              <div style={{ fontSize: "0.75rem", color: "#9ca3af", marginBottom: "12px" }}>
+                {template.categoryTemplates?.length || 0} categories • {template.ruleTemplates?.length || 0} rules • {template.variableDefinitions?.length || 0} variables
+              </div>
+              {onSelectTemplate && (
+                <button
+                  className="button secondary"
+                  onClick={onSelectTemplate}
+                >
+                  Change Template
+                </button>
+              )}
             </div>
-          </div>
-        )}
+          ) : (
+            <div>
+              <p style={{ fontSize: "0.875rem", color: "#6b7280", marginBottom: "12px" }}>
+                No template selected. Creating session from scratch.
+              </p>
+              {onSelectTemplate && (
+                <button
+                  className="button secondary"
+                  onClick={onSelectTemplate}
+                >
+                  Select Template
+                </button>
+              )}
+            </div>
+          )}
+        </div>
         <div className="card stack">
           <label className="label" htmlFor="title">
             Session title

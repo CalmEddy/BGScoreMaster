@@ -51,7 +51,7 @@ const AppContent = () => {
       id: "welcome",
       target: "h1",
       title: "Welcome to Universal Score Keeper!",
-      content: "Track scores for any board game. Let's take a quick tour to get you started.",
+      content: "Track scores for any board game—no turn management or rules enforcement. Let's take a quick tour to get you started.",
       position: "bottom",
     },
     {
@@ -171,6 +171,7 @@ const AppContent = () => {
         templateId={templateId}
         state={state}
         onBack={() => setView({ name: "home" })}
+        onSelectTemplate={() => setView({ name: "template-selector" })}
         onCreate={(sessionId) => setView({ name: "scoreboard", sessionId })}
       />
     );
@@ -270,11 +271,24 @@ const AppContent = () => {
     <>
       <Home
         state={state}
-        onNewSession={() => setView({ name: "setup" })}
+        onNewSession={() => setView({ name: "template-selector" })}
         onOpenSession={(sessionId) => setView({ name: "scoreboard", sessionId })}
         onImportState={handleImportState}
         onShowHelp={() => setShowHelp(true)}
         onOpenBuilder={() => setView({ name: "builder" })}
+        onDeleteSession={(sessionId) => {
+          dispatch({ type: "session/remove", payload: { sessionId } });
+          // Navigate to home if we're viewing the deleted session
+          if (view.name === "scoreboard" && view.sessionId === sessionId) {
+            setView({ name: "home" });
+          } else if (view.name === "player" && view.sessionId === sessionId) {
+            setView({ name: "home" });
+          } else if (view.name === "categories" && view.sessionId === sessionId) {
+            setView({ name: "home" });
+          } else if (view.name === "rules" && view.sessionId === sessionId) {
+            setView({ name: "home" });
+          }
+        }}
       />
       {showOnboarding && (
         <Onboarding

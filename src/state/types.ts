@@ -9,6 +9,10 @@ export type Session = {
     roundsEnabled: boolean;
     scoreDirection: "higherWins" | "lowerWins";
     allowNegative: boolean;
+    showRoundControls?: boolean;
+    showSessionVariables?: boolean;
+    showPlayerVariables?: boolean;
+    showQuickAdd?: boolean;
   };
   playerIds: ID[];
   categoryIds: ID[];
@@ -98,10 +102,22 @@ export type RuleTemplate = {
   required: boolean;
 };
 
+export type VariableOwnership =
+  | "inactive"
+  | "player"
+  | "global"
+  | { type: "variable"; variableId: ID };
+
+export type VariableActiveWindow =
+  | "always"
+  | { type: "round"; roundId?: ID; roundIndex?: number }
+  | { type: "phase"; phaseId?: ID }
+  | { type: "variable"; variableId: ID };
+
 export type VariableDefinition = {
   id: ID;
   name: string;
-  type: "number" | "boolean" | "string" | "resource" | "territory" | "card" | "custom";
+  type: "number" | "boolean" | "string" | "resource" | "territory" | "card" | "custom" | "set";
   defaultValue?: any;
   min?: number;
   max?: number;
@@ -109,6 +125,16 @@ export type VariableDefinition = {
   category?: string;
   icon?: string;
   description?: string;
+  ownership?: VariableOwnership;
+  activeWindow?: VariableActiveWindow;
+  calculation?: string;
+  scoreImpact?: string;
+  state?: string;
+  // Set-specific properties
+  setType?: "identical" | "elements"; // Type of set
+  setElements?: ID[]; // For "elements" sets: array of variable definition IDs
+  setElementTemplate?: VariableDefinition; // For "identical" sets: template for the repeated element
+  setIds?: ID[]; // For element variables: which sets they belong to
 };
 
 export type GameMechanic = {
@@ -119,14 +145,27 @@ export type GameMechanic = {
   enabled: boolean;
 };
 
+export type SetElementValue = {
+  elementVariableDefinitionId: ID;
+  quantity: number; // For identical sets, this is the count
+  properties?: Record<string, any>; // Optional properties for each element
+};
+
+export type SetValue = 
+  | number  // For identical sets: simple count
+  | SetElementValue[]; // For elements sets: array of element values
+
 export type VariableValue = {
   id: ID;
   sessionId: ID;
   variableDefinitionId: ID;
   playerId?: ID;
-  value: any;
+  value: any | SetValue; // Extend to support SetValue
   updatedAt: number;
   updatedBy?: "manual" | "rule" | "mechanic";
+  state?: string;
+  computedValue?: any;
+  lastComputedAt?: number;
 };
 
 export type VariableHistory = {
@@ -190,6 +229,7 @@ export type AppAction =
   | { type: "session/create"; payload: Session }
   | { type: "session/update"; payload: Session }
   | { type: "session/activate"; payload: ID }
+  | { type: "session/remove"; payload: { sessionId: ID } }
   | { type: "player/add"; payload: Player }
   | { type: "player/remove"; payload: { sessionId: ID; playerId: ID } }
   | { type: "player/update"; payload: Player }
@@ -211,6 +251,7 @@ export type AppAction =
   | { type: "variable/increment"; payload: { variableValueId: ID; amount: number } }
   | { type: "variable/reset"; payload: { variableValueId: ID; defaultValue: any } }
   | { type: "variable/history-add"; payload: VariableHistory }
+  | { type: "variable/recompute"; payload: { variableValueId: ID } }
   | { type: "state/replace"; payload: AppState }
   | { type: "onboarding/complete" }
   | { type: "onboarding/set-step"; payload: number }

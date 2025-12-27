@@ -1,9 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { createId } from "../lib/id";
-import { AppAction, AppState, CategoryTemplate, GameMechanic, GameTemplate, RuleTemplate, VariableDefinition } from "../state/types";
+import { AppAction, AppState, CategoryTemplate, GameTemplate, RuleTemplate, VariableDefinition } from "../state/types";
 import CategoryBuilder from "../components/CategoryBuilder";
 import VariableBuilder from "../components/VariableBuilder";
-import MechanicsBuilder from "../components/MechanicsBuilder";
 import RuleTemplateEditor from "../components/RuleTemplateEditor";
 import CategoryTemplateEditor from "../components/CategoryTemplateEditor";
 
@@ -47,7 +46,6 @@ const TemplateBuilder = ({
   const [variableDefinitions, setVariableDefinitions] = useState<VariableDefinition[]>(
     existingTemplate?.variableDefinitions || []
   );
-  const [mechanics, setMechanics] = useState<GameMechanic[]>(existingTemplate?.mechanics || []);
   const [editingRule, setEditingRule] = useState<RuleTemplate | null>(null);
   const [editingCategory, setEditingCategory] = useState<CategoryTemplate | null>(null);
 
@@ -57,7 +55,6 @@ const TemplateBuilder = ({
     "Categories",
     "Variables",
     "Rules",
-    "Mechanics",
     "Preview",
   ];
 
@@ -88,7 +85,7 @@ const TemplateBuilder = ({
       categoryTemplates,
       ruleTemplates,
       variableDefinitions,
-      mechanics,
+      mechanics: existingTemplate?.mechanics || [],
     };
 
     if (existingTemplate) {
@@ -368,16 +365,6 @@ const TemplateBuilder = ({
 
           {step === 5 && (
             <div className="stack">
-              <h2>Game Mechanics</h2>
-              <p style={{ fontSize: "0.875rem", color: "#6b7280" }}>
-                Add game-specific mechanics like turn order, phases, resource management, etc.
-              </p>
-              <MechanicsBuilder mechanics={mechanics} onChange={setMechanics} />
-            </div>
-          )}
-
-          {step === 6 && (
-            <div className="stack">
               <h2>Preview</h2>
               <div className="card stack">
                 <div className="inline" style={{ gap: "8px", marginBottom: "12px" }}>
@@ -394,7 +381,6 @@ const TemplateBuilder = ({
                   <p><strong>Categories:</strong> {categoryTemplates.length}</p>
                   <p><strong>Rules:</strong> {ruleTemplates.length}</p>
                   <p><strong>Variables:</strong> {variableDefinitions.length}</p>
-                  <p><strong>Mechanics:</strong> {mechanics.length}</p>
                 </div>
               </div>
             </div>

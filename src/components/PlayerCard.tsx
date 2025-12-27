@@ -17,6 +17,8 @@ const PlayerCard = ({
   sessionId,
   state,
   onVariableUpdate,
+  showQuickAdd,
+  showVariables,
 }: {
   name: string;
   total: number;
@@ -29,6 +31,8 @@ const PlayerCard = ({
   sessionId?: string;
   state?: AppState;
   onVariableUpdate?: (variableValueId: string, value: any) => void;
+  showQuickAdd: boolean;
+  showVariables: boolean;
 }) => {
   const playerVariables = useMemo(() => {
     if (!playerId || !sessionId || !state) return [];
@@ -58,7 +62,7 @@ const PlayerCard = ({
     return groups;
   }, [playerVariables, variableDefinitions]);
 
-  const hasVariables = playerVariables.length > 0;
+  const hasVariables = playerVariables.length > 0 && showVariables;
   return (
     <div className="card player-card">
       <div className="inline" style={{ justifyContent: "space-between" }}>
@@ -67,18 +71,20 @@ const PlayerCard = ({
         </button>
         <span className={`score ${isWinner ? "winner" : ""}`}>{total}</span>
       </div>
-      <div className="quick-buttons">
-        {quickValues.map((value) => (
-          <button
-            key={value}
-            className="button secondary"
-            onClick={() => onQuickAdd(value)}
-            disabled={value < 0 && !allowNegative}
-          >
-            {value > 0 ? `+${value}` : value}
-          </button>
-        ))}
-      </div>
+      {showQuickAdd && (
+        <div className="quick-buttons">
+          {quickValues.map((value) => (
+            <button
+              key={value}
+              className="button secondary"
+              onClick={() => onQuickAdd(value)}
+              disabled={value < 0 && !allowNegative}
+            >
+              {value > 0 ? `+${value}` : value}
+            </button>
+          ))}
+        </div>
+      )}
       <button className="button" onClick={onAddEntry}>
         Add…
       </button>
@@ -109,6 +115,7 @@ const PlayerCard = ({
                         }
                       }}
                       compact
+                      allVariableDefinitions={Object.values(variableDefinitions)}
                     />
                   );
                 })}
