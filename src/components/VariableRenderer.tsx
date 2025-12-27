@@ -56,7 +56,7 @@ const VariableRenderer: React.FC<VariableRendererProps> = ({
     if (definition.setType === "identical") {
       const count = typeof variable.value === "number" ? variable.value : 0;
       const elementName = definition.setElementTemplate?.name || "items";
-      return `${count} ${elementName}${count !== 1 ? "" : ""}`;
+      return `${count} ${elementName}`;
     } else {
       // Elements set
       const elements = Array.isArray(variable.value) ? variable.value as SetElementValue[] : [];
