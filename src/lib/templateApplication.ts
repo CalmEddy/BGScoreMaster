@@ -1,6 +1,6 @@
 import { createId } from "./id";
-import { AppState, Category, CategoryTemplate, GameTemplate, Player, Round, ScoringRule, RuleTemplate, Session, VariableValue } from "../state/types";
-import { initializeVariablesFromTemplate } from "./variableStorage";
+import { AppState, Category, GameTemplate, Player, Round, ScoringRule, Session } from "../state/types";
+import { initializeObjectsFromTemplate } from "./objectStorage";
 
 export const applyTemplate = (
   template: GameTemplate,
@@ -9,6 +9,7 @@ export const applyTemplate = (
   playerNames: string[],
   sessionTitle?: string
 ): string => {
+  void state;
   const sessionId = createId();
   const now = Date.now();
 
@@ -23,8 +24,8 @@ export const applyTemplate = (
       scoreDirection: template.defaultSettings.scoreDirection,
       allowNegative: template.defaultSettings.allowNegative,
       showRoundControls: true,
-      showSessionVariables: true,
-      showPlayerVariables: true,
+      showSessionObjects: true,
+      showPlayerObjects: true,
       showQuickAdd: true,
     },
     playerIds: [],
@@ -122,12 +123,12 @@ export const applyTemplate = (
       dispatch({ type: "rule/add", payload: rule });
     });
 
-  // Initialize variables from template
-  const variableValues = initializeVariablesFromTemplate(template, sessionId, playerObjects);
-  const variableValueIds: string[] = [];
-  variableValues.forEach((variable) => {
-    variableValueIds.push(variable.id);
-    dispatch({ type: "variable/set", payload: variable });
+  // Initialize objects from template
+  const objectValues = initializeObjectsFromTemplate(template, sessionId, playerObjects);
+  const objectValueIds: string[] = [];
+  objectValues.forEach((objectValue) => {
+    objectValueIds.push(objectValue.id);
+    dispatch({ type: "object/set", payload: objectValue });
   });
 
   // Activate mechanics
@@ -158,7 +159,7 @@ export const applyTemplate = (
       categoryIds: Array.from(categoryMap.values()),
       ruleIds,
       roundIds,
-      variableValueIds,
+      objectValueIds,
       activeMechanicIds,
     },
   });
@@ -243,21 +244,21 @@ export const applyTemplateToExistingSession = (
       dispatch({ type: "rule/add", payload: rule });
     });
 
-  // Initialize variables from template (only if they don't already exist)
-  const existingVariableValueIds = session.variableValueIds || [];
-  const existingVariableDefIds = new Set(
-    existingVariableValueIds
-      .map((id) => state.variableValues[id]?.variableDefinitionId)
+  // Initialize objects from template (only if they don't already exist)
+  const existingGameObjectValueIds = session.objectValueIds || [];
+  const existingObjectDefIds = new Set(
+    existingGameObjectValueIds
+      .map((id) => state.objectValues[id]?.objectDefinitionId)
   );
 
-  const variableValues = initializeVariablesFromTemplate(template, sessionId, existingPlayers);
-  const newVariableValueIds: string[] = [];
-  variableValues.forEach((variable) => {
-    // Only add if variable doesn't already exist for this session
-    const alreadyExists = existingVariableDefIds.has(variable.variableDefinitionId);
+  const objectValues = initializeObjectsFromTemplate(template, sessionId, existingPlayers);
+  const newGameObjectValueIds: string[] = [];
+  objectValues.forEach((objectValue) => {
+    // Only add if object doesn't already exist for this session
+    const alreadyExists = existingObjectDefIds.has(objectValue.objectDefinitionId);
     if (!alreadyExists) {
-      newVariableValueIds.push(variable.id);
-      dispatch({ type: "variable/set", payload: variable });
+      newGameObjectValueIds.push(objectValue.id);
+      dispatch({ type: "object/set", payload: objectValue });
     }
   });
 
@@ -269,7 +270,7 @@ export const applyTemplateToExistingSession = (
       templateId: template.id,
       categoryIds: [...(session.categoryIds || []), ...newCategoryIds],
       ruleIds: [...(session.ruleIds || []), ...newRuleIds],
-      variableValueIds: [...existingVariableValueIds, ...newVariableValueIds],
+      objectValueIds: [...existingGameObjectValueIds, ...newGameObjectValueIds],
     },
   });
 };
@@ -293,4 +294,3 @@ export const validateTemplateCompatibility = (
     errors,
   };
 };
-

@@ -5,14 +5,12 @@ type TooltipPosition = "top" | "bottom" | "left" | "right";
 const Tooltip = ({
   content,
   children,
-  id,
   position = "top",
   show = true,
   onDismiss,
 }: {
   content: string;
   children: React.ReactNode;
-  id?: string;
   position?: TooltipPosition;
   show?: boolean;
   onDismiss?: () => void;
@@ -126,4 +124,3 @@ const Tooltip = ({
 };
 
 export default Tooltip;
-

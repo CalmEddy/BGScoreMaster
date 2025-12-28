@@ -7,10 +7,10 @@ import {
   GameTemplate,
   PlayerCardConfig,
   RuleTemplate,
-  VariableDefinition,
+  GameObjectDefinition,
 } from "../state/types";
 import CategoryBuilder from "../components/CategoryBuilder";
-import VariableBuilder from "../components/VariableBuilder";
+import ObjectBuilder from "../components/ObjectBuilder";
 import RuleTemplateEditor from "../components/RuleTemplateEditor";
 import CategoryTemplateEditor from "../components/CategoryTemplateEditor";
 import PlayerCardDesigner from "../components/PlayerCardDesigner";
@@ -52,16 +52,16 @@ const TemplateBuilder = ({
     existingTemplate?.categoryTemplates || []
   );
   const [ruleTemplates, setRuleTemplates] = useState<RuleTemplate[]>(existingTemplate?.ruleTemplates || []);
-  const [variableDefinitions, setVariableDefinitions] = useState<VariableDefinition[]>(
-    existingTemplate?.variableDefinitions || []
+  const [objectDefinitions, setGameObjectDefinitions] = useState<GameObjectDefinition[]>(
+    existingTemplate?.objectDefinitions || []
   );
   const [playerCardConfig, setPlayerCardConfig] = useState<PlayerCardConfig>(
-    existingTemplate?.uiConfig?.playerCard || { actionButtons: [], variableIds: [] }
+    existingTemplate?.uiConfig?.playerCard || { actionButtons: [], objectIds: [] }
   );
   const [editingRule, setEditingRule] = useState<RuleTemplate | null>(null);
   const [editingCategory, setEditingCategory] = useState<CategoryTemplate | null>(null);
 
-  const steps = ["Basic Info", "Settings", "Categories", "Variables", "Player Card", "Rules", "Preview"];
+  const steps = ["Basic Info", "Settings", "Categories", "Objects", "Player Card", "Rules", "Preview"];
 
   const handleSave = () => {
     if (!name.trim()) {
@@ -89,7 +89,7 @@ const TemplateBuilder = ({
       },
       categoryTemplates,
       ruleTemplates,
-      variableDefinitions,
+      objectDefinitions,
       mechanics: existingTemplate?.mechanics || [],
       uiConfig: {
         ...(existingTemplate?.uiConfig || {}),
@@ -267,7 +267,6 @@ const TemplateBuilder = ({
               <CategoryBuilder
                 categories={categoryTemplates}
                 onChange={setCategoryTemplates}
-                variables={variableDefinitions.map((v) => v.id)}
                 onEdit={(category) => setEditingCategory(category)}
               />
             </div>
@@ -275,11 +274,11 @@ const TemplateBuilder = ({
 
           {step === 3 && (
             <div className="stack">
-              <h2>Variables</h2>
+              <h2>Objects</h2>
               <p style={{ fontSize: "0.875rem", color: "#6b7280" }}>
-                Define custom variables for this game (resources, tokens, etc.). Variables will be available in formulas and rules.
+                Define custom objects for this game (resources, tokens, etc.). Objects will be available in formulas and rules.
               </p>
-              <VariableBuilder variables={variableDefinitions} onChange={setVariableDefinitions} />
+              <ObjectBuilder objects={objectDefinitions} onChange={setGameObjectDefinitions} />
             </div>
           )}
 
@@ -287,11 +286,11 @@ const TemplateBuilder = ({
             <div className="stack">
               <h2>Player Card Designer</h2>
               <p style={{ fontSize: "0.875rem", color: "#6b7280" }}>
-                Customize the quick action buttons and owned variables displayed on each player card.
+                Customize the quick action buttons and owned objects displayed on each player card.
               </p>
               <PlayerCardDesigner
                 categories={categoryTemplates}
-                variables={variableDefinitions}
+                objects={objectDefinitions}
                 value={playerCardConfig}
                 onChange={setPlayerCardConfig}
               />
@@ -302,7 +301,7 @@ const TemplateBuilder = ({
             <div className="stack">
               <h2>Rules</h2>
               <p style={{ fontSize: "0.875rem", color: "#6b7280" }}>
-                Define automatic scoring rules that will be applied when the template is used. Rules can reference categories and variables.
+                Define automatic scoring rules that will be applied when the template is used. Rules can reference categories and objects.
               </p>
               <div className="card stack">
                 <div className="card-title">Rule Templates</div>
@@ -404,7 +403,7 @@ const TemplateBuilder = ({
                   <p><strong>Settings:</strong> {scoreDirection}, Rounds: {roundsEnabled ? "Yes" : "No"}, Negatives: {allowNegative ? "Allowed" : "Not allowed"}</p>
                   <p><strong>Categories:</strong> {categoryTemplates.length}</p>
                   <p><strong>Rules:</strong> {ruleTemplates.length}</p>
-                  <p><strong>Variables:</strong> {variableDefinitions.length}</p>
+                  <p><strong>Objects:</strong> {objectDefinitions.length}</p>
                 </div>
               </div>
             </div>
@@ -443,7 +442,7 @@ const TemplateBuilder = ({
         <CategoryTemplateEditor
           category={editingCategory}
           allCategories={categoryTemplates}
-          variables={variableDefinitions}
+          objects={objectDefinitions}
           onSave={(updatedCategory) => {
             setCategoryTemplates(
               categoryTemplates.map((c) => (c.id === updatedCategory.id ? updatedCategory : c))
@@ -458,4 +457,3 @@ const TemplateBuilder = ({
 };
 
 export default TemplateBuilder;
-

@@ -91,11 +91,11 @@ const CategoryConfigModal = ({
               onChange={setFormula}
               categories={state.categories}
               categoryId={category.id}
-              variables={
+              objects={
                 (() => {
                   const session = state.sessions[category.sessionId];
                   const template = session?.templateId ? state.templates[session.templateId] : undefined;
-                  return template?.variableDefinitions || [];
+                  return template?.objectDefinitions || [];
                 })()
               }
             />
@@ -120,4 +120,3 @@ const CategoryConfigModal = ({
 };
 
 export default CategoryConfigModal;
-

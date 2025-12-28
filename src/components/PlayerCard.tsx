@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { AppState, VariableValue, VariableDefinition } from "../state/types";
-import { getPlayerVariables } from "../lib/variableStorage";
-import VariableRenderer from "./VariableRenderer";
+import { AppState, GameObjectValue, GameObjectDefinition } from "../state/types";
+import { getPlayerObjects } from "../lib/objectStorage";
+import ObjectRenderer from "./ObjectRenderer";
 
 const quickValues = [1, 5, 10, -1, -5, -10];
 
@@ -16,9 +16,9 @@ const PlayerCard = ({
   playerId,
   sessionId,
   state,
-  onVariableUpdate,
+  onObjectUpdate,
   showQuickAdd,
-  showVariables,
+  showObjects,
   onCategoryAction,
 }: {
   name: string;
@@ -31,16 +31,16 @@ const PlayerCard = ({
   playerId?: string;
   sessionId?: string;
   state?: AppState;
-  onVariableUpdate?: (variableValueId: string, value: any) => void;
+  onObjectUpdate?: (objectValueId: string, value: any) => void;
   showQuickAdd: boolean;
-  showVariables: boolean;
+  showObjects: boolean;
   onCategoryAction?: (categoryId: string, mode: "add" | "subtract") => void;
 }) => {
   const [actionMode, setActionMode] = useState<"add" | "subtract">("add");
 
-  const playerVariables = useMemo(() => {
+  const playerObjects = useMemo(() => {
     if (!playerId || !sessionId || !state) return [];
-    return getPlayerVariables(state, sessionId, playerId);
+    return getPlayerObjects(state, sessionId, playerId);
   }, [playerId, sessionId, state]);
 
   const template = useMemo(() => {
@@ -50,19 +50,19 @@ const PlayerCard = ({
     return state.templates[session.templateId];
   }, [sessionId, state]);
 
-  const variableDefinitions = useMemo(() => {
+  const objectDefinitions = useMemo(() => {
     if (!template) return {};
-    return template.variableDefinitions.reduce((acc, def) => {
+    return template.objectDefinitions.reduce((acc, def) => {
       acc[def.id] = def;
       return acc;
-    }, {} as Record<string, VariableDefinition>);
+    }, {} as Record<string, GameObjectDefinition>);
   }, [template]);
 
-  const selectedVariableIds = template?.uiConfig?.playerCard?.variableIds;
-  const visibleVariables = useMemo(() => {
-    if (!selectedVariableIds || selectedVariableIds.length === 0) return playerVariables;
-    return playerVariables.filter((variable) => selectedVariableIds.includes(variable.variableDefinitionId));
-  }, [playerVariables, selectedVariableIds]);
+  const selectedObjectIds = template?.uiConfig?.playerCard?.objectIds;
+  const visibleObjects = useMemo(() => {
+    if (!selectedObjectIds || selectedObjectIds.length === 0) return playerObjects;
+    return playerObjects.filter((objectValue) => selectedObjectIds.includes(objectValue.objectDefinitionId));
+  }, [playerObjects, selectedObjectIds]);
 
   const actionButtons = template?.uiConfig?.playerCard?.actionButtons || [];
   const categoryNameMap = useMemo(() => {
@@ -80,18 +80,18 @@ const PlayerCard = ({
     return session.categoryIds.map((id) => state.categories[id]).filter(Boolean);
   }, [sessionId, state]);
 
-  const groupedVariables = useMemo(() => {
-    const groups: Record<string, VariableValue[]> = {};
-    visibleVariables.forEach((variable) => {
-      const def = variableDefinitions[variable.variableDefinitionId];
+  const groupedObjects = useMemo(() => {
+    const groups: Record<string, GameObjectValue[]> = {};
+    visibleObjects.forEach((objectValue) => {
+      const def = objectDefinitions[objectValue.objectDefinitionId];
       const category = def?.category || "Other";
       if (!groups[category]) groups[category] = [];
-      groups[category].push(variable);
+      groups[category].push(objectValue);
     });
     return groups;
-  }, [visibleVariables, variableDefinitions]);
+  }, [visibleObjects, objectDefinitions]);
 
-  const hasVariables = visibleVariables.length > 0 && showVariables;
+  const hasObjects = visibleObjects.length > 0 && showObjects;
   const hasActionButtons = actionButtons.length > 0 && !!onCategoryAction;
   return (
     <div className="card player-card">
@@ -164,34 +164,34 @@ const PlayerCard = ({
       <button className="button" onClick={onAddEntry}>
         Add…
       </button>
-      {hasVariables && (
+      {hasObjects && (
         <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid #e5e7eb" }}>
           <div style={{ fontSize: "0.75rem", color: "#6b7280", marginBottom: "8px", fontWeight: "500" }}>
-            Variables
+            Objects
           </div>
-          {Object.entries(groupedVariables).map(([category, variables]) => (
+          {Object.entries(groupedObjects).map(([category, objects]) => (
             <div key={category} style={{ marginBottom: "8px" }}>
-              {Object.keys(groupedVariables).length > 1 && (
+              {Object.keys(groupedObjects).length > 1 && (
                 <div style={{ fontSize: "0.7rem", color: "#9ca3af", marginBottom: "4px" }}>
                   {category}
                 </div>
               )}
               <div className="inline" style={{ gap: "4px", flexWrap: "wrap" }}>
-                {variables.map((variable) => {
-                  const def = variableDefinitions[variable.variableDefinitionId];
+                {objects.map((objectValue) => {
+                  const def = objectDefinitions[objectValue.objectDefinitionId];
                   if (!def) return null;
                   return (
-                    <VariableRenderer
-                      key={variable.id}
-                      variable={variable}
+                    <ObjectRenderer
+                      key={objectValue.id}
+                      objectValue={objectValue}
                       definition={def}
                       onUpdate={(value) => {
-                        if (onVariableUpdate) {
-                          onVariableUpdate(variable.id, value);
+                        if (onObjectUpdate) {
+                          onObjectUpdate(objectValue.id, value);
                         }
                       }}
                       compact
-                      allVariableDefinitions={Object.values(variableDefinitions)}
+                      allObjectDefinitions={Object.values(objectDefinitions)}
                     />
                   );
                 })}
@@ -205,4 +205,3 @@ const PlayerCard = ({
 };
 
 export default PlayerCard;
-

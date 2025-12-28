@@ -1,4 +1,5 @@
 import { AppState } from "../state/types";
+import { migrateImportedState } from "./migrations";
 
 const STORAGE_KEY = "universal-score-keeper-v1";
 
@@ -10,7 +11,7 @@ export const loadState = (): AppState | null => {
     const parsed = JSON.parse(raw) as AppState;
     if (!parsed || typeof parsed !== "object") return null;
     if (!parsed.sessions || !parsed.players || !parsed.entries) return null;
-    return parsed;
+    return migrateImportedState(parsed);
   } catch {
     return null;
   }
@@ -28,9 +29,8 @@ export const importState = (value: string): AppState | null => {
     const parsed = JSON.parse(value) as AppState;
     if (!parsed || typeof parsed !== "object") return null;
     if (!parsed.sessions || !parsed.players || !parsed.entries) return null;
-    return parsed;
+    return migrateImportedState(parsed);
   } catch {
     return null;
   }
 };
-

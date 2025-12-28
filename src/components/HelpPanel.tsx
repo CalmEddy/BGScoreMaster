@@ -19,12 +19,12 @@ const HelpPanel = ({ onClose }: { onClose: () => void }) => {
           <h4>Scoring Only</h4>
           <p>
             This app is a scoring assistant. It does not manage turn order, enforce game rules,
-            or act as an arbiter. Use it to track variables, apply formulas, and adjust totals.
+            or act as an arbiter. Use it to track objects, apply formulas, and adjust totals.
           </p>
           <h4>What You Control</h4>
           <ul>
             <li>Which sessions and templates are used</li>
-            <li>Which variables and categories are shown</li>
+            <li>Which objects and categories are shown</li>
             <li>Manual adjustments or overrides for corrections</li>
           </ul>
         </div>
@@ -74,7 +74,7 @@ const HelpPanel = ({ onClose }: { onClose: () => void }) => {
           <h4>Formula-Based Scoring</h4>
           <p>Categories can use formulas instead of simple sums. Formulas support:</p>
           <ul>
-            <li><strong>Variables:</strong> Use <code>{`{categoryName}`}</code> to reference category totals by name</li>
+            <li><strong>Objects:</strong> Use <code>{`{categoryName}`}</code> to reference category totals by name</li>
             <li><strong>Math operations:</strong> +, -, *, /, ()</li>
             <li><strong>Functions:</strong> max(), min(), sum(), avg(), round()</li>
           </ul>
@@ -203,4 +203,3 @@ const HelpPanel = ({ onClose }: { onClose: () => void }) => {
 };
 
 export default HelpPanel;
-

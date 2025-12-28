@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { AppState, GameTemplate } from "../state/types";
-import { createId } from "../lib/id";
 
 const BuilderHome = ({
   state,
@@ -124,7 +123,7 @@ const BuilderHome = ({
                       <div style={{ fontSize: "0.75rem", color: "#9ca3af", marginTop: "8px" }}>
                         {template.categoryTemplates?.length || 0} categories •{" "}
                         {template.ruleTemplates?.length || 0} rules •{" "}
-                        {template.variableDefinitions?.length || 0} variables
+                        {template.objectDefinitions?.length || 0} objects
                         {template.author && ` • by ${template.author}`}
                       </div>
                       <small style={{ color: "#9ca3af" }}>
@@ -163,4 +162,3 @@ const BuilderHome = ({
 };
 
 export default BuilderHome;
-

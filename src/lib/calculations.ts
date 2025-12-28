@@ -1,8 +1,8 @@
 import { AppState, Category, ScoreEntry } from "../state/types";
 import { evaluateFormula, ExtendedFormulaContext } from "./formulaParser";
-import { getVariableValue } from "./variableStorage";
-import { evaluateAllVariables } from "./variableEvaluation";
-import { getVariableState as getVarState } from "./variableCalculator";
+import { getObjectValue } from "./objectStorage";
+import { evaluateAllObjects } from "./objectEvaluation";
+import { getGameObjectState as getObjState } from "./objectCalculator";
 
 export const getSessionEntries = (state: AppState, sessionId: string): ScoreEntry[] =>
   Object.values(state.entries || {}).filter((entry) => entry.sessionId === sessionId);
@@ -103,7 +103,7 @@ const applyFormulas = (
 
     try {
       const getCategoryValue = (categoryNameOrId: string): number => {
-        // Handle special variables
+        // Handle special objects
         if (categoryNameOrId === "total") {
           return Object.values(result).reduce((sum, val) => sum + val, 0);
         }
@@ -119,15 +119,15 @@ const applyFormulas = (
         return result[categoryNameOrId] ?? 0;
       };
 
-      const resolveVariable = (variableName: string): number | undefined => {
-        // Try to find variable by name from template
+      const resolveObject = (objectName: string): number | undefined => {
+        // Try to find object by name from template
         if (template) {
-          const varDef = template.variableDefinitions.find(
-            (v) => v.name.toLowerCase() === variableName.toLowerCase() || v.id === variableName
+          const varDef = template.objectDefinitions.find(
+            (v) => v.name.toLowerCase() === objectName.toLowerCase() || v.id === objectName
           );
           if (varDef) {
-            // Try player variable first (returns computed value if available)
-            const playerVar = getVariableValue(state, sessionId, varDef.id, playerId);
+            // Try player object first (returns computed value if available)
+            const playerVar = getObjectValue(state, sessionId, varDef.id, playerId);
             if (playerVar !== undefined) {
               // Handle set types - convert to number for formulas
               if (varDef.type === "set") {
@@ -145,8 +145,8 @@ const applyFormulas = (
                 return playerVar;
               }
             }
-            // Try session variable
-            const sessionVar = getVariableValue(state, sessionId, varDef.id);
+            // Try session object
+            const sessionVar = getObjectValue(state, sessionId, varDef.id);
             if (sessionVar !== undefined) {
               // Handle set types - convert to number for formulas
               if (varDef.type === "set") {
@@ -169,8 +169,7 @@ const applyFormulas = (
         return undefined;
       };
 
-      // Enhanced context with variable state and ownership functions
-      const session = state.sessions[sessionId];
+      // Enhanced context with object state and ownership functions
       const getRoundIndex = (): number => {
         if (currentRoundId) {
           const round = state.rounds[currentRoundId];
@@ -183,25 +182,25 @@ const applyFormulas = (
         categories: result,
         total: Object.values(result).reduce((sum, val) => sum + val, 0),
         round: getRoundIndex(),
-        getVariableState: (varName: string) => {
+        getObjectState: (objectName: string) => {
           if (template) {
-            const varDef = template.variableDefinitions.find(
-              (v) => v.name.toLowerCase() === varName.toLowerCase() || v.id === varName
+            const varDef = template.objectDefinitions.find(
+              (v) => v.name.toLowerCase() === objectName.toLowerCase() || v.id === objectName
             );
             if (varDef) {
-              return getVarState(state, sessionId, varDef.id, playerId);
+              return getObjState(state, sessionId, varDef.id, playerId);
             }
           }
           return "inactive";
         },
-        ownsVariable: (varName: string, checkPlayerId?: string) => {
+        ownsObject: (objectName: string, checkPlayerId?: string) => {
           if (template) {
-            const varDef = template.variableDefinitions.find(
-              (v) => v.name.toLowerCase() === varName.toLowerCase() || v.id === varName
+            const varDef = template.objectDefinitions.find(
+              (v) => v.name.toLowerCase() === objectName.toLowerCase() || v.id === objectName
             );
             if (varDef) {
               const targetPlayerId = checkPlayerId || playerId;
-              const varState = getVarState(state, sessionId, varDef.id, targetPlayerId);
+              const varState = getObjState(state, sessionId, varDef.id, targetPlayerId);
               return varState === "owned" || varState === "active";
             }
           }
@@ -219,7 +218,7 @@ const applyFormulas = (
           round: getRoundIndex(),
         },
         getCategoryValue,
-        resolveVariable,
+        resolveObject,
         extendedContext
       );
 
@@ -267,20 +266,20 @@ export const computeCategoryTotals = (
   playerId: string,
   currentRoundId?: string
 ): Record<string, number> => {
-  // Step 0: Evaluate variables first (this updates computed values and applies score impacts)
-  // Note: Variable score impacts create ScoreEntry objects, which will be included in base totals
-  const { updatedVariables, scoreEntries } = evaluateAllVariables(state, sessionId, currentRoundId);
+  // Step 0: Evaluate objects first (this updates computed values and applies score impacts)
+  // Note: Object score impacts create ScoreEntry objects, which will be included in base totals
+  evaluateAllObjects(state, sessionId, currentRoundId);
   
-  // If variables were updated, we'd need to update state, but for now we'll work with current state
-  // The score entries from variable impacts will be included in the next evaluation cycle
+  // If objects were updated, we'd need to update state, but for now we'll work with current state
+  // The score entries from object impacts will be included in the next evaluation cycle
 
-  // Step 1: Compute base totals from entries (including any score entries from variable impacts)
+  // Step 1: Compute base totals from entries (including any score entries from object impacts)
   let totals = computeBaseCategoryTotals(state, sessionId, playerId);
 
   // Step 2: Compute nested category totals (parents from children)
   totals = computeNestedCategoryTotals(state, sessionId, totals);
 
-  // Step 3: Apply formulas (with enhanced variable support)
+  // Step 3: Apply formulas (with enhanced object support)
   totals = applyFormulas(state, sessionId, totals, playerId, currentRoundId);
 
   // Step 4: Apply weights
@@ -310,4 +309,3 @@ export const formatCategoryName = (
   if (!categoryId) return "Uncategorized";
   return categories[categoryId]?.name ?? "(deleted)";
 };
-

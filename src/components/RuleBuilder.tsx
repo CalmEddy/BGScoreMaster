@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { createId } from "../lib/id";
 import Modal from "./Modal";
 import { AppState, ScoringRule, Session } from "../state/types";
@@ -312,4 +312,3 @@ const RuleBuilder = ({
 };
 
 export default RuleBuilder;
-

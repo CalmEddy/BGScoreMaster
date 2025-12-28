@@ -1,5 +1,3 @@
-import { AppState } from "../state/types";
-
 type FormulaContext = {
   categories: Record<string, number>;
   total?: number;
@@ -8,7 +6,7 @@ type FormulaContext = {
 
 // Token types for parsing
 type Token = {
-  type: "number" | "variable" | "operator" | "function" | "paren" | "comma";
+  type: "number" | "object" | "operator" | "function" | "paren" | "comma";
   value: string;
 };
 
@@ -52,7 +50,7 @@ function tokenize(formula: string): Token[] {
       continue;
     }
 
-    // Variables (category references like {categoryId})
+    // Objects (category references like {categoryId})
     if (char === "{") {
       let varName = "";
       i++; // Skip {
@@ -61,7 +59,7 @@ function tokenize(formula: string): Token[] {
         i++;
       }
       if (i < formula.length) i++; // Skip }
-      tokens.push({ type: "variable", value: varName });
+      tokens.push({ type: "object", value: varName });
       continue;
     }
 
@@ -118,7 +116,7 @@ function toPostfix(tokens: Token[]): Token[] {
   };
 
   for (const token of tokens) {
-    if (token.type === "number" || token.type === "variable") {
+    if (token.type === "number" || token.type === "object") {
       output.push(token);
     } else if (token.type === "function") {
       operators.push(token);
@@ -155,25 +153,26 @@ function toPostfix(tokens: Token[]): Token[] {
   return output;
 }
 
-type StackValue = number | { type: "variable"; name: string; value?: number };
+type StackValue = number | { type: "object"; name: string; value?: number };
 
 // Evaluate postfix expression
 function evaluatePostfix(
   postfix: Token[],
   context: FormulaContext,
   getCategoryValue: (categoryId: string) => number,
-  getVariableValue?: (variableName: string) => number | undefined,
+  getGameObjectValue?: (objectName: string) => number | undefined,
   extendedContext?: ExtendedFormulaContext
 ): number {
+  void context;
   const stack: StackValue[] = [];
 
   for (const token of postfix) {
     if (token.type === "number") {
       stack.push(parseFloat(token.value));
-    } else if (token.type === "variable") {
-      // For special functions, we might need the variable name, not just the value
+    } else if (token.type === "object") {
+      // For special functions, we might need the object name, not just the value
       // Store as object to preserve name for special functions
-      stack.push({ type: "variable", name: token.value, value: undefined });
+      stack.push({ type: "object", name: token.value, value: undefined });
     } else if (token.type === "operator") {
       if (stack.length < 2) {
         throw new Error(`Not enough operands for operator ${token.value}`);
@@ -181,12 +180,12 @@ function evaluatePostfix(
       const b = stack.pop()!;
       const a = stack.pop()!;
       
-      // Resolve variables to numbers for operators
-      const aNum = typeof a === "object" && a.type === "variable"
-        ? (getVariableValue?.(a.name) ?? getCategoryValue(a.name))
+      // Resolve objects to numbers for operators
+      const aNum = typeof a === "object" && a.type === "object"
+        ? (getGameObjectValue?.(a.name) ?? getCategoryValue(a.name))
         : (typeof a === "number" ? a : 0);
-      const bNum = typeof b === "object" && b.type === "variable"
-        ? (getVariableValue?.(b.name) ?? getCategoryValue(b.name))
+      const bNum = typeof b === "object" && b.type === "object"
+        ? (getGameObjectValue?.(b.name) ?? getCategoryValue(b.name))
         : (typeof b === "number" ? b : 0);
 
       switch (token.value) {
@@ -213,21 +212,21 @@ function evaluatePostfix(
       const funcName = token.value.toLowerCase();
       
       // Handle special functions
-      if (funcName === "state" && extendedContext?.getVariableState) {
+      if (funcName === "state" && extendedContext?.getObjectState) {
         if (stack.length === 0) {
           throw new Error("state() requires one argument");
         }
         const arg = stack.pop()!;
         let varName: string;
-        if (typeof arg === "object" && arg.type === "variable") {
+        if (typeof arg === "object" && arg.type === "object") {
           varName = arg.name;
         } else if (typeof arg === "number") {
-          // If it's already a number, we can't get the variable name
-          throw new Error("state() requires a variable reference as argument");
+          // If it's already a number, we can't get the object name
+          throw new Error("state() requires an object reference as argument");
         } else {
           varName = String(arg);
         }
-        const stateStr = extendedContext.getVariableState(varName);
+        const stateStr = extendedContext.getObjectState(varName);
         // Convert state string to number for comparison
         // Return numeric representation: inactive=0, active=1, owned=2, discarded=-1
         let stateValue = 0;
@@ -235,7 +234,7 @@ function evaluatePostfix(
         else if (stateStr === "owned") stateValue = 2;
         else if (stateStr === "discarded") stateValue = -1;
         stack.push(stateValue);
-      } else if (funcName === "owns" && extendedContext?.ownsVariable) {
+      } else if (funcName === "owns" && extendedContext?.ownsObject) {
         if (stack.length < 1) {
           throw new Error("owns() requires at least one argument");
         }
@@ -246,23 +245,23 @@ function evaluatePostfix(
         let playerId: string | undefined;
         
         if (secondArg !== undefined) {
-          // Two arguments: owns(variable, playerId)
-          if (typeof firstArg === "object" && firstArg.type === "variable") {
+          // Two arguments: owns(object, playerId)
+          if (typeof firstArg === "object" && firstArg.type === "object") {
             varName = firstArg.name;
           } else {
             varName = String(firstArg);
           }
           playerId = typeof secondArg === "number" ? String(secondArg) : String(secondArg);
         } else {
-          // One argument: owns(variable) - uses current player context
-          if (typeof firstArg === "object" && firstArg.type === "variable") {
+          // One argument: owns(object) - uses current player context
+          if (typeof firstArg === "object" && firstArg.type === "object") {
             varName = firstArg.name;
           } else {
             varName = String(firstArg);
           }
         }
         
-        const owns = extendedContext.ownsVariable(varName, playerId);
+        const owns = extendedContext.ownsObject(varName, playerId);
         stack.push(owns ? 1 : 0);
       } else if (funcName === "round" && extendedContext?.getRoundIndex) {
         const roundIndex = extendedContext.getRoundIndex();
@@ -281,7 +280,7 @@ function evaluatePostfix(
         const condition = Number(stack.pop()!);
         stack.push(condition ? trueValue : falseValue);
       } else {
-        // Standard math functions - resolve variable references first
+        // Standard math functions - resolve object references first
         const func = mathFunctions[funcName];
         if (!func) {
           throw new Error(`Unknown function: ${token.value}`);
@@ -291,14 +290,14 @@ function evaluatePostfix(
         const args: number[] = [];
         const tempStack: StackValue[] = [];
         
-        // Pop arguments, resolving variables
+        // Pop arguments, resolving objects
         while (stack.length > 0) {
           const arg = stack.pop()!;
-          if (typeof arg === "object" && arg.type === "variable") {
-            // Resolve variable to its value
+          if (typeof arg === "object" && arg.type === "object") {
+            // Resolve object to its value
             let value: number | undefined;
-            if (getVariableValue) {
-              value = getVariableValue(arg.name);
+            if (getGameObjectValue) {
+              value = getGameObjectValue(arg.name);
             }
             if (value === undefined) {
               value = getCategoryValue(arg.name);
@@ -319,11 +318,11 @@ function evaluatePostfix(
           const arg = stack.pop()!;
           if (typeof arg === "number") {
             args.unshift(arg);
-          } else if (typeof arg === "object" && arg.type === "variable") {
+          } else if (typeof arg === "object" && arg.type === "object") {
             // Should have been resolved above, but handle it
             let value: number | undefined;
-            if (getVariableValue) {
-              value = getVariableValue(arg.name);
+            if (getGameObjectValue) {
+              value = getGameObjectValue(arg.name);
             }
             if (value === undefined) {
               value = getCategoryValue(arg.name);
@@ -341,10 +340,10 @@ function evaluatePostfix(
           const arg = stack.pop()!;
           if (typeof arg === "number") {
             args.push(arg);
-          } else if (typeof arg === "object" && arg.type === "variable") {
+          } else if (typeof arg === "object" && arg.type === "object") {
             let value: number | undefined;
-            if (getVariableValue) {
-              value = getVariableValue(arg.name);
+            if (getGameObjectValue) {
+              value = getGameObjectValue(arg.name);
             }
             if (value === undefined) {
               value = getCategoryValue(arg.name);
@@ -373,9 +372,9 @@ function evaluatePostfix(
   if (typeof result === "number") {
     return result;
   }
-  if (typeof result === "object" && result.type === "variable") {
-    // Resolve variable that wasn't used in any operation
-    const value = getVariableValue?.(result.name) ?? getCategoryValue(result.name);
+  if (typeof result === "object" && result.type === "object") {
+    // Resolve object that wasn't used in any operation
+    const value = getGameObjectValue?.(result.name) ?? getCategoryValue(result.name);
     return value;
   }
   return 0;
@@ -383,8 +382,8 @@ function evaluatePostfix(
 
 // Extended context for formula evaluation with special functions
 export type ExtendedFormulaContext = FormulaContext & {
-  getVariableState?: (variableName: string) => string;
-  ownsVariable?: (variableName: string, playerId?: string) => boolean;
+  getObjectState?: (objectName: string) => string;
+  ownsObject?: (objectName: string, playerId?: string) => boolean;
   getRoundIndex?: () => number;
   getPhaseId?: () => string | undefined;
 };
@@ -394,7 +393,7 @@ export function evaluateFormula(
   formula: string,
   context: FormulaContext,
   getCategoryValue: (categoryId: string) => number,
-  getVariableValue?: (variableName: string) => number | undefined,
+  getGameObjectValue?: (objectName: string) => number | undefined,
   extendedContext?: ExtendedFormulaContext
 ): number {
   if (!formula || !formula.trim()) {
@@ -413,7 +412,7 @@ export function evaluateFormula(
       const token = tokens[i];
       if (token.type === "operator" && token.value === "-") {
         const prev = i > 0 ? tokens[i - 1] : null;
-        if (!prev || (prev.type !== "number" && prev.type !== "variable" && prev.value !== ")")) {
+        if (!prev || (prev.type !== "number" && prev.type !== "object" && prev.value !== ")")) {
           // Unary minus - convert to (0 - ...)
           processedTokens.push({ type: "number", value: "0" });
           processedTokens.push({ type: "operator", value: "-" });
@@ -424,7 +423,7 @@ export function evaluateFormula(
     }
 
     const postfix = toPostfix(processedTokens);
-    return evaluatePostfix(postfix, context, getCategoryValue, getVariableValue, extendedContext);
+    return evaluatePostfix(postfix, context, getCategoryValue, getGameObjectValue, extendedContext);
   } catch (error) {
     throw new Error(`Formula error: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -458,10 +457,10 @@ export function validateFormula(formula: string): { valid: boolean; error?: stri
       return { valid: false, error: "Unmatched opening parenthesis" };
     }
 
-    // Check for valid variable syntax
+    // Check for valid object syntax
     for (const token of tokens) {
-      if (token.type === "variable" && !token.value) {
-        return { valid: false, error: "Empty variable reference" };
+      if (token.type === "object" && !token.value) {
+        return { valid: false, error: "Empty object reference" };
       }
       const funcName = token.value.toLowerCase();
       const isSpecialFunction = ["state", "owns", "round", "phase", "if"].includes(funcName);
@@ -480,18 +479,17 @@ export function validateFormula(formula: string): { valid: boolean; error?: stri
 }
 
 // Get list of category IDs referenced in formula
-export function getFormulaVariables(formula: string): string[] {
-  const variables: Set<string> = new Set();
+export function getFormulaObjects(formula: string): string[] {
+  const objects: Set<string> = new Set();
   try {
     const tokens = tokenize(formula.trim());
     for (const token of tokens) {
-      if (token.type === "variable") {
-        variables.add(token.value);
+      if (token.type === "object") {
+        objects.add(token.value);
       }
     }
   } catch {
-    // Ignore parsing errors for variable extraction
+    // Ignore parsing errors for object extraction
   }
-  return Array.from(variables);
+  return Array.from(objects);
 }
-

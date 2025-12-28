@@ -1,11 +1,13 @@
 import React, { createContext, useContext, useEffect, useMemo, useReducer } from "react";
-import { AppAction, AppState, Category, GameTemplate, Player, Round, ScoreEntry, ScoringRule, Session, VariableValue, VariableHistory } from "./types";
+import { AppAction, AppState, Category, GameTemplate, Player, Round, ScoreEntry, Session } from "./types";
 import { loadState, saveState } from "../lib/storage";
 import { loadTemplates, saveTemplates } from "../lib/templateStorage";
 import { initializeStarterTemplates } from "../lib/templates/starter";
-import { validateVariableValue } from "../lib/variableStorage";
+import { validateGameObjectValue } from "../lib/objectStorage";
+import { CURRENT_SCHEMA_VERSION, migrateAppState, runMigrationSelfCheck } from "../lib/migrations";
 
 const initialState: AppState = {
+  schemaVersion: CURRENT_SCHEMA_VERSION,
   sessions: {},
   players: {},
   categories: {},
@@ -13,7 +15,7 @@ const initialState: AppState = {
   entries: {},
   rules: {},
   templates: {},
-  variableValues: {},
+  objectValues: {},
   activeSessionId: undefined,
   onboarding: {
     completed: false,
@@ -60,7 +62,7 @@ const reducer = (state: AppState, action: AppAction): AppState => {
       const categoriesToRemove = session.categoryIds || [];
       const roundsToRemove = session.roundIds || [];
       const rulesToRemove = session.ruleIds || [];
-      const variableValuesToRemove = session.variableValueIds || [];
+      const objectValuesToRemove = session.objectValueIds || [];
 
       // Filter out players
       const remainingPlayers = state.players
@@ -97,17 +99,17 @@ const reducer = (state: AppState, action: AppAction): AppState => {
           )
         : {};
 
-      // Filter out variable values
-      const remainingVariableValues = state.variableValues
+      // Filter out object values
+      const remainingGameObjectValues = state.objectValues
         ? Object.fromEntries(
-            Object.entries(state.variableValues).filter(([id]) => !variableValuesToRemove.includes(id))
+            Object.entries(state.objectValues).filter(([id]) => !objectValuesToRemove.includes(id))
           )
         : {};
 
-      // Filter out variable history for removed variable values
-      const remainingVariableHistory = state.variableHistory
+      // Filter out object history for removed object values
+      const remainingGameObjectHistory = state.objectHistory
         ? Object.fromEntries(
-            Object.entries(state.variableHistory).filter(([id]) => !variableValuesToRemove.includes(id))
+            Object.entries(state.objectHistory).filter(([id]) => !objectValuesToRemove.includes(id))
           )
         : undefined;
 
@@ -126,8 +128,8 @@ const reducer = (state: AppState, action: AppAction): AppState => {
         rounds: remainingRounds,
         rules: remainingRules,
         entries: remainingEntries,
-        variableValues: remainingVariableValues,
-        variableHistory: remainingVariableHistory,
+        objectValues: remainingGameObjectValues,
+        objectHistory: remainingGameObjectHistory,
         activeSessionId: newActiveSessionId,
       };
     }
@@ -313,55 +315,55 @@ const reducer = (state: AppState, action: AppAction): AppState => {
       saveTemplates(newState.templates);
       return newState;
     }
-    case "variable/set": {
-      const variable = action.payload;
-      const session = state.sessions[variable.sessionId];
+    case "object/set": {
+      const objectValue = action.payload;
+      const session = state.sessions[objectValue.sessionId];
       if (!session) return state;
 
       // Validate if we have the definition
-      const template = variable.sessionId && state.sessions[variable.sessionId]?.templateId
-        ? state.templates[state.sessions[variable.sessionId].templateId!]
+      const template = objectValue.sessionId && state.sessions[objectValue.sessionId]?.templateId
+        ? state.templates[state.sessions[objectValue.sessionId].templateId!]
         : undefined;
       if (template) {
-        const varDef = template.variableDefinitions.find((v) => v.id === variable.variableDefinitionId);
+        const varDef = template.objectDefinitions.find((v) => v.id === objectValue.objectDefinitionId);
         if (varDef) {
-          const validation = validateVariableValue(variable.value, varDef);
+          const validation = validateGameObjectValue(objectValue.value, varDef);
           if (!validation.valid) {
-            console.warn("Invalid variable value:", validation.error);
+            console.warn("Invalid object value:", validation.error);
             return state;
           }
         }
       }
 
-      const variableValueIds = session.variableValueIds || [];
-      const isNew = !variableValueIds.includes(variable.id);
+      const objectValueIds = session.objectValueIds || [];
+      const isNew = !objectValueIds.includes(objectValue.id);
 
       return {
         ...state,
-        variableValues: { ...state.variableValues, [variable.id]: variable },
+        objectValues: { ...state.objectValues, [objectValue.id]: objectValue },
         sessions: {
           ...state.sessions,
-          [variable.sessionId]: updateSessionTimestamp({
+          [objectValue.sessionId]: updateSessionTimestamp({
             ...session,
-            variableValueIds: isNew ? [...variableValueIds, variable.id] : variableValueIds,
+            objectValueIds: isNew ? [...objectValueIds, objectValue.id] : objectValueIds,
           }),
         },
       };
     }
-    case "variable/update": {
-      const variable = action.payload;
-      const existing = state.variableValues[variable.id];
+    case "object/update": {
+      const objectValue = action.payload;
+      const existing = state.objectValues[objectValue.id];
       if (!existing) return state;
 
       // Validate
-      const session = state.sessions[variable.sessionId];
+      const session = state.sessions[objectValue.sessionId];
       const template = session?.templateId ? state.templates[session.templateId] : undefined;
       if (template) {
-        const varDef = template.variableDefinitions.find((v) => v.id === variable.variableDefinitionId);
+        const varDef = template.objectDefinitions.find((v) => v.id === objectValue.objectDefinitionId);
         if (varDef) {
-          const validation = validateVariableValue(variable.value, varDef);
+          const validation = validateGameObjectValue(objectValue.value, varDef);
           if (!validation.valid) {
-            console.warn("Invalid variable value:", validation.error);
+            console.warn("Invalid object value:", validation.error);
             return state;
           }
         }
@@ -369,21 +371,21 @@ const reducer = (state: AppState, action: AppAction): AppState => {
 
       return {
         ...state,
-        variableValues: { ...state.variableValues, [variable.id]: variable },
+        objectValues: { ...state.objectValues, [objectValue.id]: objectValue },
       };
     }
-    case "variable/increment": {
-      const { variableValueId, amount } = action.payload;
-      const variable = state.variableValues[variableValueId];
-      if (!variable || typeof variable.value !== "number") return state;
+    case "object/increment": {
+      const { objectValueId, amount } = action.payload;
+      const objectValue = state.objectValues[objectValueId];
+      if (!objectValue || typeof objectValue.value !== "number") return state;
 
-      const newValue = variable.value + amount;
+      const newValue = objectValue.value + amount;
 
       // Validate min/max
-      const session = state.sessions[variable.sessionId];
+      const session = state.sessions[objectValue.sessionId];
       const template = session?.templateId ? state.templates[session.templateId] : undefined;
       if (template) {
-        const varDef = template.variableDefinitions.find((v) => v.id === variable.variableDefinitionId);
+        const varDef = template.objectDefinitions.find((v) => v.id === objectValue.objectDefinitionId);
         if (varDef) {
           if (varDef.min !== undefined && newValue < varDef.min) {
             return state;
@@ -396,27 +398,27 @@ const reducer = (state: AppState, action: AppAction): AppState => {
 
       return {
         ...state,
-        variableValues: {
-          ...state.variableValues,
-          [variableValueId]: {
-            ...variable,
+        objectValues: {
+          ...state.objectValues,
+          [objectValueId]: {
+            ...objectValue,
             value: newValue,
             updatedAt: Date.now(),
           },
         },
       };
     }
-    case "variable/reset": {
-      const { variableValueId, defaultValue } = action.payload;
-      const variable = state.variableValues[variableValueId];
-      if (!variable) return state;
+    case "object/reset": {
+      const { objectValueId, defaultValue } = action.payload;
+      const objectValue = state.objectValues[objectValueId];
+      if (!objectValue) return state;
 
       return {
         ...state,
-        variableValues: {
-          ...state.variableValues,
-          [variableValueId]: {
-            ...variable,
+        objectValues: {
+          ...state.objectValues,
+          [objectValueId]: {
+            ...objectValue,
             value: defaultValue,
             updatedAt: Date.now(),
             updatedBy: "manual",
@@ -424,23 +426,23 @@ const reducer = (state: AppState, action: AppAction): AppState => {
         },
       };
     }
-    case "variable/history-add": {
+    case "object/history-add": {
       const history = action.payload;
-      const currentHistory = state.variableHistory || {};
-      const varHistory = currentHistory[history.variableValueId] || [];
+      const currentHistory = state.objectHistory || {};
+      const objHistory = currentHistory[history.objectValueId] || [];
 
       return {
         ...state,
-        variableHistory: {
+        objectHistory: {
           ...currentHistory,
-          [history.variableValueId]: [...varHistory, history],
+          [history.objectValueId]: [...objHistory, history],
         },
       };
     }
-    case "variable/recompute": {
-      const { variableValueId } = action.payload;
-      const variable = state.variableValues[variableValueId];
-      if (!variable) return state;
+    case "object/recompute": {
+      const { objectValueId } = action.payload;
+      const objectValue = state.objectValues[objectValueId];
+      if (!objectValue) return state;
 
       // Recompute will be handled by the evaluation system
       // This action just marks that recomputation is needed
@@ -458,20 +460,22 @@ const reducer = (state: AppState, action: AppAction): AppState => {
       };
     }
     case "onboarding/set-step": {
+      const onboarding = state.onboarding ?? { completed: false, dismissedTooltips: [] };
       return {
         ...state,
         onboarding: {
-          ...state.onboarding,
+          ...onboarding,
           currentStep: action.payload,
         },
       };
     }
     case "onboarding/dismiss-tooltip": {
-      const dismissed = state.onboarding?.dismissedTooltips ?? [];
+      const onboarding = state.onboarding ?? { completed: false, dismissedTooltips: [] };
+      const dismissed = onboarding.dismissedTooltips ?? [];
       return {
         ...state,
         onboarding: {
-          ...state.onboarding,
+          ...onboarding,
           dismissedTooltips: [...dismissed, action.payload],
         },
       };
@@ -485,30 +489,36 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
   const [state, dispatch] = useReducer(reducer, initialState, () => {
     const saved = loadState();
     const savedTemplates = loadTemplates();
+
+    const isDev = (import.meta as { env?: { DEV?: boolean } }).env?.DEV;
+    if (isDev) {
+      runMigrationSelfCheck();
+    }
     
     if (saved) {
+      const migratedState = migrateAppState(saved);
       // Ensure onboarding state exists for backward compatibility
-      if (!saved.onboarding) {
-        saved.onboarding = {
+      if (!migratedState.onboarding) {
+        migratedState.onboarding = {
           completed: false,
           dismissedTooltips: [],
         };
       }
       // Ensure rules and ruleIds exist for backward compatibility
-      if (!saved.rules) {
-        saved.rules = {};
+      if (!migratedState.rules) {
+        migratedState.rules = {};
       }
       // Merge templates from separate storage and initialize starters
       // Prioritize templates from separate storage (newer), but include any from main state
-      const allTemplates = { ...(saved.templates || {}), ...savedTemplates };
-      saved.templates = initializeStarterTemplates(allTemplates);
+      const allTemplates = { ...(migratedState.templates || {}), ...savedTemplates };
+      migratedState.templates = initializeStarterTemplates(allTemplates);
       // Ensure sessions have ruleIds
-      Object.values(saved.sessions || {}).forEach((session) => {
+      Object.values(migratedState.sessions || {}).forEach((session) => {
         if (!session.ruleIds) {
           session.ruleIds = [];
         }
       });
-      return saved;
+      return migratedState;
     }
     
     // If no saved state, load templates separately and initialize starters
@@ -551,4 +561,3 @@ export const sortRounds = (rounds: Round[]): Round[] =>
 
 export const sortEntries = (entries: ScoreEntry[]): ScoreEntry[] =>
   [...entries].sort((a, b) => b.createdAt - a.createdAt);
-

@@ -4,7 +4,7 @@ import PlayerCard from "../components/PlayerCard";
 import { createId } from "../lib/id";
 import { computePlayerTotal, findWinners, getSessionEntries } from "../lib/calculations";
 import { evaluateRules } from "../lib/ruleEngine";
-import { getSessionVariables } from "../lib/variableStorage";
+import { getSessionObjects } from "../lib/objectStorage";
 import { applyTemplateToExistingSession, validateTemplateCompatibility } from "../lib/templateApplication";
 import {
   AppAction,
@@ -51,8 +51,8 @@ const Scoreboard = ({
   const [entryNote, setEntryNote] = useState("");
   const displaySettings = {
     showRoundControls: session.settings.showRoundControls ?? true,
-    showSessionVariables: session.settings.showSessionVariables ?? true,
-    showPlayerVariables: session.settings.showPlayerVariables ?? true,
+    showSessionObjects: session.settings.showSessionObjects ?? true,
+    showPlayerObjects: session.settings.showPlayerObjects ?? true,
     showQuickAdd: session.settings.showQuickAdd ?? true,
   };
 
@@ -111,7 +111,7 @@ const Scoreboard = ({
     players,
     session.id,
     state.entries,
-    state.variableValues,
+    state.objectValues,
     state.categories,
   ]);
 
@@ -198,7 +198,7 @@ const Scoreboard = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     state.entries ? Object.keys(state.entries).length : 0,
-    state.variableValues ? Object.keys(state.variableValues).length : 0,
+    state.objectValues ? Object.keys(state.objectValues).length : 0,
     session?.id,
     selectedRoundId
   ]);
@@ -300,33 +300,33 @@ const Scoreboard = ({
           </button>
         </div>
 
-        {session.templateId && displaySettings.showSessionVariables && (() => {
-          const sessionVars = getSessionVariables(state, session.id);
+        {session.templateId && displaySettings.showSessionObjects && (() => {
+          const sessionObjects = getSessionObjects(state, session.id);
           const template = state.templates[session.templateId!];
-          return sessionVars.length > 0 ? (
+          return sessionObjects.length > 0 ? (
             <div className="card stack">
-              <div className="card-title">Session Variables</div>
+              <div className="card-title">Session Objects</div>
               <div className="inline" style={{ gap: "8px", flexWrap: "wrap" }}>
-                {sessionVars.map((variable) => {
-                  const varDef = template?.variableDefinitions.find((v) => v.id === variable.variableDefinitionId);
+                {sessionObjects.map((objectValue) => {
+                  const varDef = template?.objectDefinitions.find((v) => v.id === objectValue.objectDefinitionId);
                   if (!varDef) return null;
                   // For sets, show a summary
                   let displayValue: string;
                   if (varDef.type === "set") {
                     if (varDef.setType === "identical") {
-                      const count = typeof variable.value === "number" ? variable.value : 0;
+                      const count = typeof objectValue.value === "number" ? objectValue.value : 0;
                       const elementName = varDef.setElementTemplate?.name || "items";
                       displayValue = `${count} ${elementName}`;
                     } else {
-                      const elements = Array.isArray(variable.value) ? variable.value : [];
+                      const elements = Array.isArray(objectValue.value) ? objectValue.value : [];
                       const total = elements.reduce((sum: number, el: any) => sum + (el.quantity || 0), 0);
                       displayValue = `${total} element${total !== 1 ? "s" : ""}`;
                     }
                   } else {
-                    displayValue = String(variable.value);
+                    displayValue = String(objectValue.value);
                   }
                   return (
-                    <div key={variable.id} className="inline" style={{ gap: "4px", padding: "4px 8px", background: "#f3f4f6", borderRadius: "4px" }}>
+                    <div key={objectValue.id} className="inline" style={{ gap: "4px", padding: "4px 8px", background: "#f3f4f6", borderRadius: "4px" }}>
                       {varDef.icon && <span>{varDef.icon}</span>}
                       <strong>{varDef.name}:</strong>
                       <span>{displayValue}</span>
@@ -354,14 +354,14 @@ const Scoreboard = ({
               sessionId={session.id}
               state={state}
               showQuickAdd={displaySettings.showQuickAdd}
-              showVariables={displaySettings.showPlayerVariables}
-              onVariableUpdate={(variableValueId, value) => {
-                const variable = state.variableValues?.[variableValueId];
-                if (variable) {
+              showObjects={displaySettings.showPlayerObjects}
+              onObjectUpdate={(objectValueId, value) => {
+                const objectValue = state.objectValues?.[objectValueId];
+                if (objectValue) {
                   dispatch({
-                    type: "variable/update",
+                    type: "object/update",
                     payload: {
-                      ...variable,
+                      ...objectValue,
                       value,
                       updatedAt: Date.now(),
                       updatedBy: "manual",
@@ -461,7 +461,7 @@ const Scoreboard = ({
                   <div style={{ fontSize: "0.75rem", color: "#9ca3af", marginBottom: "8px" }}>
                     {state.templates[session.templateId].categoryTemplates?.length || 0} categories •{" "}
                     {state.templates[session.templateId].ruleTemplates?.length || 0} rules •{" "}
-                    {state.templates[session.templateId].variableDefinitions?.length || 0} variables
+                    {state.templates[session.templateId].objectDefinitions?.length || 0} objects
                   </div>
                 </>
               ) : (
@@ -491,7 +491,7 @@ const Scoreboard = ({
 
                     // Confirm before applying
                     if (window.confirm(
-                      `Apply template "${template.name}" to this session? This will add categories, rules, and variables from the template. Existing data will be preserved.`
+                      `Apply template "${template.name}" to this session? This will add categories, rules, and objects from the template. Existing data will be preserved.`
                     )) {
                       applyTemplateToExistingSession(template, session, state, dispatch);
                       setSettingsOpen(false);
@@ -507,7 +507,7 @@ const Scoreboard = ({
                   ))}
                 </select>
                 <small style={{ display: "block", marginTop: "4px", color: "#6b7280" }}>
-                  Applying a template will add its categories, rules, and variables to this session.
+                  Applying a template will add its categories, rules, and objects to this session.
                 </small>
               </div>
             </div>
@@ -586,7 +586,7 @@ const Scoreboard = ({
               <label className="inline">
                 <input
                   type="checkbox"
-                  checked={displaySettings.showSessionVariables}
+                  checked={displaySettings.showSessionObjects}
                   onChange={(event) =>
                     dispatch({
                       type: "session/update",
@@ -594,18 +594,18 @@ const Scoreboard = ({
                         ...session,
                         settings: {
                           ...session.settings,
-                          showSessionVariables: event.target.checked,
+                          showSessionObjects: event.target.checked,
                         },
                       }),
                     })
                   }
                 />
-                Show session variables
+                Show session objects
               </label>
               <label className="inline">
                 <input
                   type="checkbox"
-                  checked={displaySettings.showPlayerVariables}
+                  checked={displaySettings.showPlayerObjects}
                   onChange={(event) =>
                     dispatch({
                       type: "session/update",
@@ -613,13 +613,13 @@ const Scoreboard = ({
                         ...session,
                         settings: {
                           ...session.settings,
-                          showPlayerVariables: event.target.checked,
+                          showPlayerObjects: event.target.checked,
                         },
                       }),
                     })
                   }
                 />
-                Show player variables on cards
+                Show player objects on cards
               </label>
               <label className="inline">
                 <input
@@ -652,4 +652,3 @@ const Scoreboard = ({
 };
 
 export default Scoreboard;
-

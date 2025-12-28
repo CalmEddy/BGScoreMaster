@@ -32,7 +32,7 @@ export const createStarterTemplates = (): GameTemplate[] => {
         },
       ],
       ruleTemplates: [],
-      variableDefinitions: [],
+      objectDefinitions: [],
       mechanics: [],
     },
     {
@@ -72,7 +72,7 @@ export const createStarterTemplates = (): GameTemplate[] => {
         },
       ],
       ruleTemplates: [],
-      variableDefinitions: [
+      objectDefinitions: [
         {
           id: "wood",
           name: "Wood",
@@ -167,7 +167,7 @@ export const createStarterTemplates = (): GameTemplate[] => {
         },
       ],
       ruleTemplates: [],
-      variableDefinitions: [
+      objectDefinitions: [
         {
           id: "territories",
           name: "Territories",

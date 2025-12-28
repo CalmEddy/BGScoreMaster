@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AppState, GameTemplate } from "../state/types";
+import { AppState } from "../state/types";
 
 const TemplateSelector = ({
   state,
@@ -105,7 +105,7 @@ const TemplateSelector = ({
                   </p>
                 )}
                 <div style={{ fontSize: "0.75rem", color: "#9ca3af", marginTop: "8px" }}>
-                  {template.categoryTemplates?.length || 0} categories • {template.ruleTemplates?.length || 0} rules • {template.variableDefinitions?.length || 0} variables
+                  {template.categoryTemplates?.length || 0} categories • {template.ruleTemplates?.length || 0} rules • {template.objectDefinitions?.length || 0} objects
                 </div>
                 <button
                   className="button full"
@@ -127,4 +127,3 @@ const TemplateSelector = ({
 };
 
 export default TemplateSelector;
-

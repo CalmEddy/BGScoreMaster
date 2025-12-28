@@ -1,9 +1,9 @@
-import { AppState, VariableDefinition, VariableValue, ID, Round } from "../state/types";
-import { getVariableByDefinition, getVariableValue } from "./variableStorage";
+import { AppState, GameObjectDefinition, GameObjectValue, ID } from "../state/types";
+import { getObjectByDefinition, getObjectValue } from "./objectStorage";
 import { evaluateFormula, ExtendedFormulaContext } from "./formulaParser";
 import { computeCategoryTotals } from "./calculations";
 
-type VariableEvaluationContext = {
+type GameObjectEvaluationContext = {
   state: AppState;
   sessionId: ID;
   playerId?: ID;
@@ -11,11 +11,11 @@ type VariableEvaluationContext = {
 };
 
 /**
- * Evaluates variable ownership based on ownership rules
+ * Evaluates object ownership based on ownership rules
  */
-export function evaluateVariableOwnership(
-  varDef: VariableDefinition,
-  context: VariableEvaluationContext
+export function evaluateGameObjectOwnership(
+  varDef: GameObjectDefinition,
+  context: GameObjectEvaluationContext
 ): ID | "global" | "inactive" | undefined {
   const { state, sessionId, playerId } = context;
 
@@ -29,17 +29,17 @@ export function evaluateVariableOwnership(
     case "player":
       return playerId || undefined;
     default:
-      // Ownership is variable reference
-      if (ownership.type === "variable") {
-        const refVarDef = state.templates[state.sessions[sessionId]?.templateId || ""]?.variableDefinitions.find(
-          (v) => v.id === ownership.variableId
+      // Ownership is object reference
+      if (ownership.type === "object") {
+        const refVarDef = state.templates[state.sessions[sessionId]?.templateId || ""]?.objectDefinitions.find(
+          (v) => v.id === ownership.objectId
         );
         if (!refVarDef) return "inactive";
 
-        // Check if referenced variable is owned by a player
-        const refVarValue = getVariableByDefinition(state, sessionId, ownership.variableId, playerId);
+        // Check if referenced object is owned by a player
+        const refVarValue = getObjectByDefinition(state, sessionId, ownership.objectId, playerId);
         if (refVarValue) {
-          const refState = evaluateVariableState(refVarDef, refVarValue, context);
+          const refState = evaluateGameObjectState(refVarDef, refVarValue, context);
           if (refState === "owned" && refVarValue.playerId) {
             return refVarValue.playerId;
           }
@@ -54,11 +54,11 @@ export function evaluateVariableOwnership(
 }
 
 /**
- * Evaluates if variable is active based on active window rules
+ * Evaluates if object is active based on active window rules
  */
 export function evaluateActiveWindow(
-  varDef: VariableDefinition,
-  context: VariableEvaluationContext
+  varDef: GameObjectDefinition,
+  context: GameObjectEvaluationContext
 ): boolean {
   const { state, sessionId, currentRoundId } = context;
 
@@ -91,15 +91,15 @@ export function evaluateActiveWindow(
     return hasPhaseMechanic === true;
   }
 
-  if (activeWindow.type === "variable") {
-    const refVarDef = state.templates[state.sessions[sessionId]?.templateId || ""]?.variableDefinitions.find(
-      (v) => v.id === activeWindow.variableId
+  if (activeWindow.type === "object") {
+    const refVarDef = state.templates[state.sessions[sessionId]?.templateId || ""]?.objectDefinitions.find(
+      (v) => v.id === activeWindow.objectId
     );
     if (!refVarDef) return false;
 
-    const refVarValue = getVariableByDefinition(state, sessionId, activeWindow.variableId, context.playerId);
+    const refVarValue = getObjectByDefinition(state, sessionId, activeWindow.objectId, context.playerId);
     if (refVarValue) {
-      const refState = evaluateVariableState(refVarDef, refVarValue, context);
+      const refState = evaluateGameObjectState(refVarDef, refVarValue, context);
       return refState === "active" || refState === "owned";
     }
     return false;
@@ -109,25 +109,25 @@ export function evaluateActiveWindow(
 }
 
 /**
- * Evaluates the current state of a variable
+ * Evaluates the current state of an object
  */
-export function evaluateVariableState(
-  varDef: VariableDefinition,
-  varValue: VariableValue,
-  context: VariableEvaluationContext
+export function evaluateGameObjectState(
+  varDef: GameObjectDefinition,
+  varValue: GameObjectValue,
+  context: GameObjectEvaluationContext
 ): "inactive" | "active" | "discarded" | "owned" | string {
-  // If variable has explicit state, use it
+  // If object has explicit state, use it
   if (varValue.state) {
     return varValue.state;
   }
 
-  // Check if variable is discarded (could be a custom state)
+  // Check if object is discarded (could be a custom state)
   if (varValue.value === null || varValue.value === undefined) {
     return "inactive";
   }
 
   // Evaluate ownership
-  const ownership = evaluateVariableOwnership(varDef, context);
+  const ownership = evaluateGameObjectOwnership(varDef, context);
   if (ownership === "inactive") {
     return "inactive";
   }
@@ -151,12 +151,12 @@ export function evaluateVariableState(
 }
 
 /**
- * Computes variable value from calculation formula
+ * Computes object value from calculation formula
  */
-export function computeVariableValue(
-  varDef: VariableDefinition,
-  varValue: VariableValue,
-  context: VariableEvaluationContext
+export function computeGameObjectValue(
+  varDef: GameObjectDefinition,
+  varValue: GameObjectValue,
+  context: GameObjectEvaluationContext
 ): any {
   if (!varDef.calculation) {
     return varValue.value;
@@ -190,14 +190,14 @@ export function computeVariableValue(
       return categoryTotals[categoryNameOrId] ?? 0;
     };
 
-    const getVariableValueForFormula = (variableName: string): number | undefined => {
+    const getGameObjectValueForFormula = (objectName: string): number | undefined => {
       if (template) {
-        const refVarDef = template.variableDefinitions.find(
-          (v) => v.name.toLowerCase() === variableName.toLowerCase() || v.id === variableName
+        const refVarDef = template.objectDefinitions.find(
+          (v) => v.name.toLowerCase() === objectName.toLowerCase() || v.id === objectName
         );
         if (refVarDef) {
-          // Try player variable first
-          const playerVar = getVariableValue(state, sessionId, refVarDef.id, playerId);
+          // Try player object first
+          const playerVar = getObjectValue(state, sessionId, refVarDef.id, playerId);
           if (playerVar !== undefined) {
             // Handle set types - convert to number for formulas
             if (refVarDef.type === "set") {
@@ -215,8 +215,8 @@ export function computeVariableValue(
               return playerVar;
             }
           }
-          // Try session variable
-          const sessionVar = getVariableValue(state, sessionId, refVarDef.id);
+          // Try session object
+          const sessionVar = getObjectValue(state, sessionId, refVarDef.id);
           if (sessionVar !== undefined) {
             // Handle set types - convert to number for formulas
             if (refVarDef.type === "set") {
@@ -239,32 +239,32 @@ export function computeVariableValue(
       return undefined;
     };
 
-    const getVariableStateForFormula = (variableName: string): string => {
+    const getGameObjectStateForFormula = (objectName: string): string => {
       if (template) {
-        const refVarDef = template.variableDefinitions.find(
-          (v) => v.name.toLowerCase() === variableName.toLowerCase() || v.id === variableName
+        const refVarDef = template.objectDefinitions.find(
+          (v) => v.name.toLowerCase() === objectName.toLowerCase() || v.id === objectName
         );
         if (refVarDef) {
-          const refVarValue = getVariableByDefinition(state, sessionId, refVarDef.id, playerId);
+          const refVarValue = getObjectByDefinition(state, sessionId, refVarDef.id, playerId);
           if (refVarValue) {
-            return evaluateVariableState(refVarDef, refVarValue, context);
+            return evaluateGameObjectState(refVarDef, refVarValue, context);
           }
         }
       }
       return "inactive";
     };
 
-    const ownsVariable = (variableName: string, checkPlayerId?: ID): boolean => {
+    const ownsGameObject = (objectName: string, checkPlayerId?: ID): boolean => {
       if (template) {
-        const refVarDef = template.variableDefinitions.find(
-          (v) => v.name.toLowerCase() === variableName.toLowerCase() || v.id === variableName
+        const refVarDef = template.objectDefinitions.find(
+          (v) => v.name.toLowerCase() === objectName.toLowerCase() || v.id === objectName
         );
         if (refVarDef) {
           const targetPlayerId = checkPlayerId || playerId;
           if (targetPlayerId) {
-            const refVarValue = getVariableByDefinition(state, sessionId, refVarDef.id, targetPlayerId);
+            const refVarValue = getObjectByDefinition(state, sessionId, refVarDef.id, targetPlayerId);
             if (refVarValue) {
-              const refState = evaluateVariableState(refVarDef, refVarValue, {
+              const refState = evaluateGameObjectState(refVarDef, refVarValue, {
                 ...context,
                 playerId: targetPlayerId,
               });
@@ -289,8 +289,8 @@ export function computeVariableValue(
       categories: categoryTotals,
       total: Object.values(categoryTotals).reduce((sum, val) => sum + val, 0),
       round: getRoundIndex(),
-      getVariableState: getVariableStateForFormula,
-      ownsVariable: ownsVariable,
+      getObjectState: getGameObjectStateForFormula,
+      ownsObject: ownsGameObject,
       getRoundIndex: getRoundIndex,
       getPhaseId: () => undefined, // Phase support is future
     };
@@ -303,52 +303,52 @@ export function computeVariableValue(
         round: getRoundIndex(),
       },
       getCategoryValue,
-      getVariableValueForFormula,
+      getGameObjectValueForFormula,
       extendedContext
     );
 
     return value;
   } catch (error) {
-    console.warn(`Error computing variable ${varDef.name}:`, error);
+    console.warn(`Error computing object ${varDef.name}:`, error);
     return varValue.value; // Fallback to stored value
   }
 }
 
 /**
- * Gets the state of a variable (for use in formulas)
+ * Gets the state of an object (for use in formulas)
  */
-export function getVariableState(
+export function getGameObjectState(
   state: AppState,
   sessionId: ID,
-  variableDefinitionId: ID,
+  objectDefinitionId: ID,
   playerId?: ID
 ): string {
   const session = state.sessions[sessionId];
   const template = session?.templateId ? state.templates[session.templateId] : undefined;
   if (!template) return "inactive";
 
-  const varDef = template.variableDefinitions.find((v) => v.id === variableDefinitionId);
+  const varDef = template.objectDefinitions.find((v) => v.id === objectDefinitionId);
   if (!varDef) return "inactive";
 
-  const varValue = getVariableByDefinition(state, sessionId, variableDefinitionId, playerId);
+  const varValue = getObjectByDefinition(state, sessionId, objectDefinitionId, playerId);
   if (!varValue) return "inactive";
 
-  const context: VariableEvaluationContext = {
+  const context: GameObjectEvaluationContext = {
     state,
     sessionId,
     playerId,
   };
 
-  return evaluateVariableState(varDef, varValue, context);
+  return evaluateGameObjectState(varDef, varValue, context);
 }
 
 /**
- * Applies score impact from variable's scoreImpact formula
+ * Applies score impact from an object's scoreImpact formula
  */
-export function applyVariableScoreImpact(
-  varDef: VariableDefinition,
-  varValue: VariableValue,
-  context: VariableEvaluationContext
+export function applyGameObjectScoreImpact(
+  varDef: GameObjectDefinition,
+  varValue: GameObjectValue,
+  context: GameObjectEvaluationContext
 ): number {
   if (!varDef.scoreImpact || !varValue.playerId) {
     return 0;
@@ -377,13 +377,13 @@ export function applyVariableScoreImpact(
       return categoryTotals[categoryNameOrId] ?? 0;
     };
 
-    const getVariableValueForFormula = (variableName: string): number | undefined => {
+    const getGameObjectValueForFormula = (objectName: string): number | undefined => {
       if (template) {
-        const refVarDef = template.variableDefinitions.find(
-          (v) => v.name.toLowerCase() === variableName.toLowerCase() || v.id === variableName
+        const refVarDef = template.objectDefinitions.find(
+          (v) => v.name.toLowerCase() === objectName.toLowerCase() || v.id === objectName
         );
         if (refVarDef) {
-          const playerVar = getVariableValue(state, sessionId, refVarDef.id, playerId);
+          const playerVar = getObjectValue(state, sessionId, refVarDef.id, playerId);
           if (playerVar !== undefined) {
             // Handle set types - convert to number for formulas
             if (refVarDef.type === "set") {
@@ -401,7 +401,7 @@ export function applyVariableScoreImpact(
               return playerVar;
             }
           }
-          const sessionVar = getVariableValue(state, sessionId, refVarDef.id);
+          const sessionVar = getObjectValue(state, sessionId, refVarDef.id);
           if (sessionVar !== undefined) {
             // Handle set types - convert to number for formulas
             if (refVarDef.type === "set") {
@@ -431,13 +431,12 @@ export function applyVariableScoreImpact(
         total: Object.values(categoryTotals).reduce((sum, val) => sum + val, 0),
       },
       getCategoryValue,
-      getVariableValueForFormula
+      getGameObjectValueForFormula
     );
 
     return value;
   } catch (error) {
-    console.warn(`Error applying score impact for variable ${varDef.name}:`, error);
+    console.warn(`Error applying score impact for object ${varDef.name}:`, error);
     return 0;
   }
 }
-

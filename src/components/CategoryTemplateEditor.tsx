@@ -1,12 +1,12 @@
 import { useState } from "react";
 import Modal from "./Modal";
-import { CategoryTemplate, VariableDefinition } from "../state/types";
+import { CategoryTemplate, GameObjectDefinition } from "../state/types";
 import FormulaEditor from "./FormulaEditor";
 
 type CategoryTemplateEditorProps = {
   category: CategoryTemplate;
   allCategories: CategoryTemplate[];
-  variables?: VariableDefinition[];
+  objects?: GameObjectDefinition[];
   onSave: (category: CategoryTemplate) => void;
   onCancel: () => void;
 };
@@ -14,7 +14,7 @@ type CategoryTemplateEditorProps = {
 const CategoryTemplateEditor: React.FC<CategoryTemplateEditorProps> = ({
   category,
   allCategories,
-  variables,
+  objects,
   onSave,
   onCancel,
 }) => {
@@ -142,7 +142,7 @@ const CategoryTemplateEditor: React.FC<CategoryTemplateEditorProps> = ({
                 return acc;
               }, {} as Record<string, any>)}
               categoryId={category.id}
-              variables={variables}
+              objects={objects}
             />
           </div>
         )}
@@ -164,4 +164,3 @@ const CategoryTemplateEditor: React.FC<CategoryTemplateEditorProps> = ({
 };
 
 export default CategoryTemplateEditor;
-
