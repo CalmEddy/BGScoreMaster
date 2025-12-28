@@ -1,10 +1,19 @@
 import { useState } from "react";
 import { createId } from "../lib/id";
-import { AppAction, AppState, CategoryTemplate, GameTemplate, RuleTemplate, VariableDefinition } from "../state/types";
+import {
+  AppAction,
+  AppState,
+  CategoryTemplate,
+  GameTemplate,
+  PlayerCardConfig,
+  RuleTemplate,
+  VariableDefinition,
+} from "../state/types";
 import CategoryBuilder from "../components/CategoryBuilder";
 import VariableBuilder from "../components/VariableBuilder";
 import RuleTemplateEditor from "../components/RuleTemplateEditor";
 import CategoryTemplateEditor from "../components/CategoryTemplateEditor";
+import PlayerCardDesigner from "../components/PlayerCardDesigner";
 
 const TemplateBuilder = ({
   state,
@@ -46,17 +55,13 @@ const TemplateBuilder = ({
   const [variableDefinitions, setVariableDefinitions] = useState<VariableDefinition[]>(
     existingTemplate?.variableDefinitions || []
   );
+  const [playerCardConfig, setPlayerCardConfig] = useState<PlayerCardConfig>(
+    existingTemplate?.uiConfig?.playerCard || { actionButtons: [], variableIds: [] }
+  );
   const [editingRule, setEditingRule] = useState<RuleTemplate | null>(null);
   const [editingCategory, setEditingCategory] = useState<CategoryTemplate | null>(null);
 
-  const steps = [
-    "Basic Info",
-    "Settings",
-    "Categories",
-    "Variables",
-    "Rules",
-    "Preview",
-  ];
+  const steps = ["Basic Info", "Settings", "Categories", "Variables", "Player Card", "Rules", "Preview"];
 
   const handleSave = () => {
     if (!name.trim()) {
@@ -86,6 +91,10 @@ const TemplateBuilder = ({
       ruleTemplates,
       variableDefinitions,
       mechanics: existingTemplate?.mechanics || [],
+      uiConfig: {
+        ...(existingTemplate?.uiConfig || {}),
+        playerCard: playerCardConfig,
+      },
     };
 
     if (existingTemplate) {
@@ -276,6 +285,21 @@ const TemplateBuilder = ({
 
           {step === 4 && (
             <div className="stack">
+              <h2>Player Card Designer</h2>
+              <p style={{ fontSize: "0.875rem", color: "#6b7280" }}>
+                Customize the quick action buttons and owned variables displayed on each player card.
+              </p>
+              <PlayerCardDesigner
+                categories={categoryTemplates}
+                variables={variableDefinitions}
+                value={playerCardConfig}
+                onChange={setPlayerCardConfig}
+              />
+            </div>
+          )}
+
+          {step === 5 && (
+            <div className="stack">
               <h2>Rules</h2>
               <p style={{ fontSize: "0.875rem", color: "#6b7280" }}>
                 Define automatic scoring rules that will be applied when the template is used. Rules can reference categories and variables.
@@ -363,7 +387,7 @@ const TemplateBuilder = ({
             </div>
           )}
 
-          {step === 5 && (
+          {step === 6 && (
             <div className="stack">
               <h2>Preview</h2>
               <div className="card stack">

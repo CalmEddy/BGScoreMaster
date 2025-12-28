@@ -142,6 +142,14 @@ const Scoreboard = ({
     setEntryNote("");
   };
 
+  const handleCategoryAction = (playerId: string, categoryId: string, mode: "add" | "subtract") => {
+    setEntryPlayerId(playerId);
+    setEntryValue(mode === "add" ? "1" : "-1");
+    setEntryCategoryId(categoryId);
+    setEntryRoundId(selectedRoundId);
+    setEntryNote("");
+  };
+
   const handleSaveEntry = () => {
     if (!entryPlayerId) return;
     const numericValue = Number(entryValue);
@@ -341,6 +349,7 @@ const Scoreboard = ({
               onQuickAdd={(value) => handleQuickAdd(player.id, value)}
               onAddEntry={() => handleOpenEntryModal(player.id)}
               onOpenLedger={() => onOpenPlayer(player.id)}
+              onCategoryAction={(categoryId, mode) => handleCategoryAction(player.id, categoryId, mode)}
               playerId={player.id}
               sessionId={session.id}
               state={state}

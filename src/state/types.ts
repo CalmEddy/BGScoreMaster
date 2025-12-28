@@ -178,6 +178,18 @@ export type VariableHistory = {
   note?: string;
 };
 
+export type PlayerCardActionButton = {
+  id: ID;
+  categoryId: ID;
+  label?: string;
+  color?: string;
+};
+
+export type PlayerCardConfig = {
+  actionButtons: PlayerCardActionButton[];
+  variableIds: ID[];
+};
+
 export type GameTemplate = {
   id: ID;
   name: string;
@@ -204,6 +216,7 @@ export type GameTemplate = {
     quickValues?: number[];
     defaultView?: "scoreboard" | "categories" | "players";
     colorScheme?: Record<string, string>;
+    playerCard?: PlayerCardConfig;
   };
 };
 
