@@ -1,7 +1,7 @@
 import { AppState, ScoringRule, ScoreEntry } from "../state/types";
 import { computeCategoryTotals, computePlayerTotal } from "./calculations";
 import { createId } from "./id";
-import { getVariableValue } from "./variableStorage";
+import { getObjectValue } from "./objectStorage";
 
 type RuleEvaluationContext = {
   playerId: string;
@@ -26,25 +26,25 @@ function evaluateCondition(
     case "category":
       if (!condition.categoryId) return false;
       const categoryTotals = computeCategoryTotals(state, sessionId, playerId, currentRoundId);
-      // Check if it's a category or a variable
+      // Check if it's a category or an object
       if (categoryTotals[condition.categoryId] !== undefined) {
         leftValue = categoryTotals[condition.categoryId] ?? 0;
       } else {
-        // Try to resolve as variable
+        // Try to resolve as object
         const session = state.sessions[sessionId];
         const template = session?.templateId ? state.templates[session.templateId] : undefined;
         if (template) {
-          const varDef = template.variableDefinitions.find(
+          const varDef = template.objectDefinitions.find(
             (v) => v.name.toLowerCase() === condition.categoryId?.toLowerCase() || v.id === condition.categoryId
           );
           if (varDef) {
-            // Try player variable first
-            const playerVar = getVariableValue(state, sessionId, varDef.id, playerId);
+            // Try player object first
+            const playerVar = getObjectValue(state, sessionId, varDef.id, playerId);
             if (playerVar !== undefined && typeof playerVar === "number") {
               leftValue = playerVar;
             } else {
-              // Try session variable
-              const sessionVar = getVariableValue(state, sessionId, varDef.id);
+              // Try session object
+              const sessionVar = getObjectValue(state, sessionId, varDef.id);
               if (sessionVar !== undefined && typeof sessionVar === "number") {
                 leftValue = sessionVar;
               } else {
@@ -207,4 +207,3 @@ export function testRule(
     return { wouldTrigger: false };
   }
 }
-

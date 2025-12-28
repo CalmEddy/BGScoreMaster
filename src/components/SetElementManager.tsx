@@ -1,17 +1,17 @@
 import { useState } from "react";
 import { createId } from "../lib/id";
-import { VariableDefinition, ID } from "../state/types";
+import { GameObjectDefinition, ID } from "../state/types";
 
 type SetElementManagerProps = {
-  setVariable: VariableDefinition;
-  allVariables: VariableDefinition[];
-  onUpdate: (updates: Partial<VariableDefinition>) => void;
-  onCreateElement: (elementDef: VariableDefinition) => void;
+  setObject: GameObjectDefinition;
+  allObjects: GameObjectDefinition[];
+  onUpdate: (updates: Partial<GameObjectDefinition>) => void;
+  onCreateElement: (elementDef: GameObjectDefinition) => void;
 };
 
 const SetElementManager = ({
-  setVariable,
-  allVariables,
+  setObject,
+  allObjects,
   onUpdate,
   onCreateElement,
 }: SetElementManagerProps) => {
@@ -20,25 +20,25 @@ const SetElementManager = ({
   const [newElementIcon, setNewElementIcon] = useState("");
   const [newElementType, setNewElementType] = useState<"number" | "boolean" | "string" | "resource" | "territory" | "card" | "custom">("resource");
 
-  // Get variables that can be added (not already in set, not the set itself)
-  const availableVariables = allVariables.filter(
-    (v) => v.id !== setVariable.id && !setVariable.setElements?.includes(v.id)
+  // Get objects that can be added (not already in set, not the set itself)
+  const availableObjects = allObjects.filter(
+    (v) => v.id !== setObject.id && !setObject.setElements?.includes(v.id)
   );
 
   // Get current set elements
-  const setElements = setVariable.setElements || [];
+  const setElements = setObject.setElements || [];
   const currentElements = setElements
-    .map((id) => allVariables.find((v) => v.id === id))
-    .filter(Boolean) as VariableDefinition[];
+    .map((id) => allObjects.find((v) => v.id === id))
+    .filter(Boolean) as GameObjectDefinition[];
 
-  const handleAddExisting = (variableId: ID) => {
-    const currentElements = setVariable.setElements || [];
-    if (currentElements.includes(variableId)) {
+  const handleAddExisting = (objectId: ID) => {
+    const currentElements = setObject.setElements || [];
+    if (currentElements.includes(objectId)) {
       return; // Already in set
     }
-    // Note: setIds on element variables are handled by VariableBuilder.handleUpdate
+    // Note: setIds on element objects are handled by ObjectBuilder.handleUpdate
     onUpdate({
-      setElements: [...currentElements, variableId],
+      setElements: [...currentElements, objectId],
     });
   };
 
@@ -48,19 +48,20 @@ const SetElementManager = ({
       return;
     }
 
-    const newElement: VariableDefinition = {
+    const newElement: GameObjectDefinition = {
       id: createId(),
       name: newElementName.trim(),
       type: newElementType,
       icon: newElementIcon || undefined,
-      setIds: [setVariable.id], // Mark it as belonging to this set
+      category: setObject.category || "Custom",
+      setIds: [setObject.id], // Mark it as belonging to this set
       defaultValue: newElementType === "number" || newElementType === "resource" ? 0 : undefined,
     };
 
     onCreateElement(newElement);
     
     // Add to set
-    const currentElements = setVariable.setElements || [];
+    const currentElements = setObject.setElements || [];
     onUpdate({
       setElements: [...currentElements, newElement.id],
     });
@@ -73,13 +74,13 @@ const SetElementManager = ({
   };
 
   const handleRemoveElement = (elementId: ID) => {
-    const currentElements = setVariable.setElements || [];
+    const currentElements = setObject.setElements || [];
     onUpdate({
       setElements: currentElements.filter((id) => id !== elementId),
     });
   };
 
-  if (setVariable.setType !== "elements") {
+  if (setObject.setType !== "elements") {
     return null;
   }
 
@@ -87,7 +88,7 @@ const SetElementManager = ({
     <div className="card stack" style={{ marginTop: "12px" }}>
       <div className="card-title">Set Elements</div>
       <p style={{ fontSize: "0.875rem", color: "#6b7280" }}>
-        Add variables to this set. Elements can belong to multiple sets.
+        Add objects to this set. Elements can belong to multiple sets.
       </p>
 
       {currentElements.length > 0 && (
@@ -122,7 +123,7 @@ const SetElementManager = ({
       )}
 
       <div className="inline" style={{ gap: "8px" }}>
-        {availableVariables.length > 0 && (
+        {availableObjects.length > 0 && (
           <select
             className="input"
             value=""
@@ -133,8 +134,8 @@ const SetElementManager = ({
               }
             }}
           >
-            <option value="">Add existing variable...</option>
-            {availableVariables.map((v) => (
+            <option value="">Add existing object...</option>
+            {availableObjects.map((v) => (
               <option key={v.id} value={v.id}>
                 {v.icon && `${v.icon} `}
                 {v.name} ({v.type})
@@ -200,4 +201,3 @@ const SetElementManager = ({
 };
 
 export default SetElementManager;
-

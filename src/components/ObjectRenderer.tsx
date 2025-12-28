@@ -1,29 +1,29 @@
 import { useState } from "react";
-import { VariableDefinition, VariableValue, SetValue, SetElementValue, ID } from "../state/types";
-import { validateVariableValue } from "../lib/variableStorage";
+import { GameObjectDefinition, GameObjectValue, SetElementValue } from "../state/types";
+import { validateGameObjectValue } from "../lib/objectStorage";
 import SetValueEditor from "./SetValueEditor";
 
-type VariableRendererProps = {
-  variable: VariableValue;
-  definition: VariableDefinition;
+type ObjectRendererProps = {
+  objectValue: GameObjectValue;
+  definition: GameObjectDefinition;
   onUpdate: (value: any) => void;
   compact?: boolean;
-  allVariableDefinitions?: VariableDefinition[]; // Needed for set element editing
+  allObjectDefinitions?: GameObjectDefinition[]; // Needed for set element editing
 };
 
-const VariableRenderer: React.FC<VariableRendererProps> = ({
-  variable,
+const ObjectRenderer: React.FC<ObjectRendererProps> = ({
+  objectValue,
   definition,
   onUpdate,
   compact = false,
-  allVariableDefinitions = [],
+  allObjectDefinitions = [],
 }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState(variable.value);
+  const [editValue, setEditValue] = useState(objectValue.value);
   const [showSetEditor, setShowSetEditor] = useState(false);
 
   const handleSave = () => {
-    const validation = validateVariableValue(editValue, definition);
+    const validation = validateGameObjectValue(editValue, definition);
     if (validation.valid) {
       onUpdate(editValue);
       setIsEditing(false);
@@ -33,17 +33,17 @@ const VariableRenderer: React.FC<VariableRendererProps> = ({
   };
 
   const handleIncrement = (amount: number) => {
-    if (typeof variable.value === "number") {
-      const newValue = variable.value + amount;
-      const validation = validateVariableValue(newValue, definition);
+    if (typeof objectValue.value === "number") {
+      const newValue = objectValue.value + amount;
+      const validation = validateGameObjectValue(newValue, definition);
       if (validation.valid) {
         onUpdate(newValue);
       }
     } else if (definition.type === "set" && definition.setType === "identical") {
       // Handle increment for identical sets
-      const currentCount = typeof variable.value === "number" ? variable.value : 0;
+      const currentCount = typeof objectValue.value === "number" ? objectValue.value : 0;
       const newValue = Math.max(0, currentCount + amount);
-      const validation = validateVariableValue(newValue, definition);
+      const validation = validateGameObjectValue(newValue, definition);
       if (validation.valid) {
         onUpdate(newValue);
       }
@@ -51,15 +51,15 @@ const VariableRenderer: React.FC<VariableRendererProps> = ({
   };
   
   const getSetDisplayValue = (): string => {
-    if (definition.type !== "set") return String(variable.value);
+    if (definition.type !== "set") return String(objectValue.value);
     
     if (definition.setType === "identical") {
-      const count = typeof variable.value === "number" ? variable.value : 0;
+      const count = typeof objectValue.value === "number" ? objectValue.value : 0;
       const elementName = definition.setElementTemplate?.name || "items";
       return `${count} ${elementName}${count !== 1 ? "" : ""}`;
     } else {
       // Elements set
-      const elements = Array.isArray(variable.value) ? variable.value as SetElementValue[] : [];
+      const elements = Array.isArray(objectValue.value) ? objectValue.value as SetElementValue[] : [];
       const total = elements.reduce((sum, el) => sum + el.quantity, 0);
       if (total === 0) {
         return "0 elements";
@@ -71,7 +71,7 @@ const VariableRenderer: React.FC<VariableRendererProps> = ({
       // Show element breakdown if not compact
       if (elements.length <= 3) {
         return elements.map(el => {
-          const elDef = allVariableDefinitions.find(v => v.id === el.elementVariableDefinitionId);
+          const elDef = allObjectDefinitions.find(v => v.id === el.elementObjectDefinitionId);
           const name = elDef?.name || "Unknown";
           return `${el.quantity}× ${name}`;
         }).join(", ");
@@ -84,14 +84,14 @@ const VariableRenderer: React.FC<VariableRendererProps> = ({
     // Handle set types specially - always use modal editor
     if (definition.type === "set") {
       const displayValue = getSetDisplayValue();
-      const isComputed = definition.calculation && variable.computedValue !== undefined;
+      const isComputed = definition.calculation && objectValue.computedValue !== undefined;
       
       if (showSetEditor) {
         return (
           <SetValueEditor
-            variable={variable}
+            objectValue={objectValue}
             definition={definition}
-            allVariableDefinitions={allVariableDefinitions}
+            allObjectDefinitions={allObjectDefinitions}
             onSave={(value) => {
               onUpdate(value);
               setShowSetEditor(false);
@@ -134,7 +134,7 @@ const VariableRenderer: React.FC<VariableRendererProps> = ({
               <button
                 className="button ghost"
                 onClick={() => handleIncrement(-1)}
-                disabled={definition.min !== undefined && variable.value <= definition.min}
+                disabled={definition.min !== undefined && objectValue.value <= definition.min}
                 style={{ padding: "2px 6px", minWidth: "auto" }}
               >
                 −
@@ -149,7 +149,7 @@ const VariableRenderer: React.FC<VariableRendererProps> = ({
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleSave();
                   if (e.key === "Escape") {
-                    setEditValue(variable.value);
+                    setEditValue(objectValue.value);
                     setIsEditing(false);
                   }
                 }}
@@ -160,7 +160,7 @@ const VariableRenderer: React.FC<VariableRendererProps> = ({
               <button
                 className="button ghost"
                 onClick={() => handleIncrement(1)}
-                disabled={definition.max !== undefined && variable.value >= definition.max}
+                disabled={definition.max !== undefined && objectValue.value >= definition.max}
                 style={{ padding: "2px 6px", minWidth: "auto" }}
               >
                 +
@@ -213,7 +213,7 @@ const VariableRenderer: React.FC<VariableRendererProps> = ({
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleSave();
                 if (e.key === "Escape") {
-                  setEditValue(variable.value);
+                  setEditValue(objectValue.value);
                   setIsEditing(false);
                 }
               }}
@@ -221,18 +221,18 @@ const VariableRenderer: React.FC<VariableRendererProps> = ({
             />
           );
         default:
-          return <span>{String(variable.value)}</span>;
+          return <span>{String(objectValue.value)}</span>;
       }
     }
 
     // Display mode
     // Use computed value if available, otherwise use stored value
-    const displayValue = definition.calculation && variable.computedValue !== undefined
-      ? variable.computedValue
-      : variable.value;
+    const displayValue = definition.calculation && objectValue.computedValue !== undefined
+      ? objectValue.computedValue
+      : objectValue.value;
     
-    const isComputed = definition.calculation && variable.computedValue !== undefined;
-    const isActive = variable.state === "active" || variable.state === "owned";
+    const isComputed = definition.calculation && objectValue.computedValue !== undefined;
+    const isActive = objectValue.state === "active" || objectValue.state === "owned";
     
     return (
       <div
@@ -247,7 +247,7 @@ const VariableRenderer: React.FC<VariableRendererProps> = ({
             (computed)
           </span>
         )}
-        {variable.state && (
+        {objectValue.state && (
           <span
             style={{
               fontSize: "0.75rem",
@@ -257,9 +257,9 @@ const VariableRenderer: React.FC<VariableRendererProps> = ({
               background: isActive ? "#dcfce7" : "#f3f4f6",
               borderRadius: "4px",
             }}
-            title={`State: ${variable.state}`}
+            title={`State: ${objectValue.state}`}
           >
-            {variable.state}
+            {objectValue.state}
           </span>
         )}
         {typeof displayValue === "number" && (definition.min !== undefined || definition.max !== undefined) && (
@@ -325,7 +325,7 @@ const VariableRenderer: React.FC<VariableRendererProps> = ({
             )}
             {definition.ownership && (
               <span style={{ marginRight: "12px" }}>
-                Ownership: {typeof definition.ownership === "string" ? definition.ownership : "variable"}
+                Ownership: {typeof definition.ownership === "string" ? definition.ownership : "object"}
               </span>
             )}
             {definition.activeWindow && (
@@ -343,5 +343,4 @@ const VariableRenderer: React.FC<VariableRendererProps> = ({
   );
 };
 
-export default VariableRenderer;
-
+export default ObjectRenderer;

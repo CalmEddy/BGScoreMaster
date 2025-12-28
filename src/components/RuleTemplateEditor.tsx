@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Modal from "./Modal";
 import { RuleTemplate, CategoryTemplate } from "../state/types";
 
@@ -197,4 +197,3 @@ const RuleTemplateEditor: React.FC<RuleTemplateEditorProps> = ({
 };
 
 export default RuleTemplateEditor;
-

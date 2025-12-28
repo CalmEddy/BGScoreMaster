@@ -1,26 +1,25 @@
 import { useState, useEffect } from "react";
-import { validateFormula, getFormulaVariables } from "../lib/formulaParser";
-import { Category, VariableDefinition } from "../state/types";
+import { validateFormula, getFormulaObjects } from "../lib/formulaParser";
+import { Category, GameObjectDefinition } from "../state/types";
 
 const FormulaEditor = ({
   formula,
   onChange,
   categories,
   categoryId,
-  variables,
+  objects,
 }: {
   formula: string;
   onChange: (formula: string) => void;
   categories: Record<string, Category>;
   categoryId?: string; // Current category ID to exclude from suggestions
-  variables?: VariableDefinition[]; // Template variables
+  objects?: GameObjectDefinition[]; // Template objects
 }) => {
   const [value, setValue] = useState(formula);
   const [validation, setValidation] = useState<{ valid: boolean; error?: string }>({
     valid: true,
   });
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [suggestionIndex, setSuggestionIndex] = useState(-1);
 
   useEffect(() => {
     setValue(formula);
@@ -38,11 +37,11 @@ const FormulaEditor = ({
     (cat) => cat.id !== categoryId
   );
 
-  const availableVariables = variables || [];
+  const availableObjects = objects || [];
 
   const suggestions = [
     ...availableCategories.map((cat) => `{${cat.name}}`),
-    ...availableVariables.map((v) => `{${v.name}}`),
+    ...availableObjects.map((v) => `{${v.name}}`),
     ...["max(", "min(", "sum(", "avg(", "round(", "abs(", "floor(", "ceil("],
     ...["+", "-", "*", "/", "(", ")"],
   ];
@@ -70,8 +69,8 @@ const FormulaEditor = ({
     }, 0);
   };
 
-  const formulaVars = getFormulaVariables(value);
-  const referencedCategories = formulaVars
+  const formulaObjects = getFormulaObjects(value);
+  const referencedCategories = formulaObjects
     .map((nameOrId) => {
       // Try to find by name first (user-friendly), then by ID (backward compatibility)
       return Object.values(categories).find(
@@ -80,9 +79,9 @@ const FormulaEditor = ({
     })
     .filter(Boolean) as Category[];
   
-  const referencedVariables = formulaVars
-    .map((name) => availableVariables.find((v) => v.name.toLowerCase() === name.toLowerCase() || v.id === name))
-    .filter(Boolean) as VariableDefinition[];
+  const referencedObjects = formulaObjects
+    .map((name) => availableObjects.find((v) => v.name.toLowerCase() === name.toLowerCase() || v.id === name))
+    .filter(Boolean) as GameObjectDefinition[];
 
   return (
     <div className="formula-editor">
@@ -123,7 +122,6 @@ const FormulaEditor = ({
                 key={index}
                 className="formula-suggestion"
                 onClick={() => insertSuggestion(suggestion)}
-                onMouseEnter={() => setSuggestionIndex(index)}
               >
                 {suggestion}
               </button>
@@ -132,7 +130,7 @@ const FormulaEditor = ({
         </div>
       )}
 
-      {(referencedCategories.length > 0 || referencedVariables.length > 0) && (
+      {(referencedCategories.length > 0 || referencedObjects.length > 0) && (
         <div style={{ marginTop: "12px", fontSize: "0.875rem" }}>
           {referencedCategories.length > 0 && (
             <div>
@@ -144,11 +142,11 @@ const FormulaEditor = ({
               </ul>
             </div>
           )}
-          {referencedVariables.length > 0 && (
+          {referencedObjects.length > 0 && (
             <div style={{ marginTop: "8px" }}>
-              <strong>Referenced variables:</strong>
+              <strong>Referenced objects:</strong>
               <ul style={{ margin: "4px 0", paddingLeft: "20px" }}>
-                {referencedVariables.map((v) => (
+                {referencedObjects.map((v) => (
                   <li key={v.id}>
                     {v.icon && <span style={{ marginRight: "4px" }}>{v.icon}</span>}
                     {v.name}
@@ -163,15 +161,15 @@ const FormulaEditor = ({
       <div style={{ marginTop: "12px", fontSize: "0.875rem", color: "#6b7280" }}>
         <strong>Available functions:</strong> max(), min(), sum(), avg(), round(), abs(), floor(), ceil()
         <br />
-        <strong>Special functions:</strong> state({`{variableName}`}), owns({`{variableName}`}, playerId?), round(), phase(), if(condition, trueValue, falseValue)
+        <strong>Special functions:</strong> state({`{objectName}`}), owns({`{objectName}`}, playerId?), round(), phase(), if(condition, trueValue, falseValue)
         <br />
         <strong>Operators:</strong> +, -, *, /, ^ (power)
         <br />
-        <strong>Variables:</strong> Use <code>{`{categoryName}`}</code> for categories or <code>{`{variableName}`}</code> for template variables
-        {availableVariables.length > 0 && (
+        <strong>Objects:</strong> Use <code>{`{categoryName}`}</code> for categories or <code>{`{objectName}`}</code> for template objects
+        {availableObjects.length > 0 && (
           <>
             <br />
-            <strong>Available variables:</strong> {availableVariables.map((v) => v.name).join(", ")}
+            <strong>Available objects:</strong> {availableObjects.map((v) => v.name).join(", ")}
           </>
         )}
       </div>
@@ -180,4 +178,3 @@ const FormulaEditor = ({
 };
 
 export default FormulaEditor;
-

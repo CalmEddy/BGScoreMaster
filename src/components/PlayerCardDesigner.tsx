@@ -1,24 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { createId } from "../lib/id";
-import { CategoryTemplate, PlayerCardConfig, VariableDefinition } from "../state/types";
+import { CategoryTemplate, PlayerCardConfig, GameObjectDefinition } from "../state/types";
 
 type PlayerCardDesignerProps = {
   categories: CategoryTemplate[];
-  variables: VariableDefinition[];
+  objects: GameObjectDefinition[];
   value: PlayerCardConfig;
   onChange: (next: PlayerCardConfig) => void;
 };
 
-const PlayerCardDesigner = ({ categories, variables, value, onChange }: PlayerCardDesignerProps) => {
+const PlayerCardDesigner = ({ categories, objects, value, onChange }: PlayerCardDesignerProps) => {
   const [showAddSubtract, setShowAddSubtract] = useState(true);
-  const [showVariables, setShowVariables] = useState(true);
+  const [showObjects, setShowObjects] = useState(true);
   const [mode, setMode] = useState<"add" | "subtract">("add");
-  const [showVariableModal, setShowVariableModal] = useState(false);
+  const [showObjectModal, setShowObjectModal] = useState(false);
   const [newButtonCategoryId, setNewButtonCategoryId] = useState(categories[0]?.id || "");
   const [newButtonLabel, setNewButtonLabel] = useState("");
 
   const actionButtons = value.actionButtons;
-  const ownedVariableIds = value.variableIds;
+  const ownedObjectIds = value.objectIds;
 
   const categoryLookup = useMemo(() => {
     return categories.reduce<Record<string, CategoryTemplate>>((acc, category) => {
@@ -27,15 +27,15 @@ const PlayerCardDesigner = ({ categories, variables, value, onChange }: PlayerCa
     }, {});
   }, [categories]);
 
-  const variableGroups = useMemo(() => {
-    const groups = variables.reduce<Record<string, VariableDefinition[]>>((acc, variable) => {
-      const groupName = variable.category || "Other";
+  const objectGroups = useMemo(() => {
+    const groups = objects.reduce<Record<string, GameObjectDefinition[]>>((acc, objectDefinition) => {
+      const groupName = objectDefinition.category || "Other";
       if (!acc[groupName]) acc[groupName] = [];
-      acc[groupName].push(variable);
+      acc[groupName].push(objectDefinition);
       return acc;
     }, {});
     return Object.entries(groups);
-  }, [variables]);
+  }, [objects]);
 
   useEffect(() => {
     if (!newButtonCategoryId && categories.length > 0) {
@@ -43,22 +43,22 @@ const PlayerCardDesigner = ({ categories, variables, value, onChange }: PlayerCa
     }
   }, [categories, newButtonCategoryId]);
 
-  const groupedOwnedVariables = useMemo(() => {
-    const groups = variableGroups.reduce<Record<string, VariableDefinition[]>>((acc, [groupName]) => {
+  const groupedOwnedObjects = useMemo(() => {
+    const groups = objectGroups.reduce<Record<string, GameObjectDefinition[]>>((acc, [groupName]) => {
       acc[groupName] = [];
       return acc;
     }, {});
 
-    ownedVariableIds.forEach((variableId) => {
-      const variable = variables.find((item) => item.id === variableId);
-      if (!variable) return;
-      const groupName = variable.category || "Other";
+    ownedObjectIds.forEach((objectId) => {
+      const objectDefinition = objects.find((item) => item.id === objectId);
+      if (!objectDefinition) return;
+      const groupName = objectDefinition.category || "Other";
       if (!groups[groupName]) groups[groupName] = [];
-      groups[groupName].push(variable);
+      groups[groupName].push(objectDefinition);
     });
 
     return groups;
-  }, [ownedVariableIds, variables, variableGroups]);
+  }, [ownedObjectIds, objects, objectGroups]);
 
   const handleMove = (index: number, direction: "left" | "right") => {
     const nextIndex = direction === "left" ? index - 1 : index + 1;
@@ -92,12 +92,12 @@ const PlayerCardDesigner = ({ categories, variables, value, onChange }: PlayerCa
     });
   };
 
-  const toggleVariable = (id: string) => {
+  const toggleObject = (id: string) => {
     onChange({
       ...value,
-      variableIds: ownedVariableIds.includes(id)
-        ? ownedVariableIds.filter((existing) => existing !== id)
-        : [...ownedVariableIds, id],
+      objectIds: ownedObjectIds.includes(id)
+        ? ownedObjectIds.filter((existing) => existing !== id)
+        : [...ownedObjectIds, id],
     });
   };
 
@@ -272,50 +272,50 @@ const PlayerCardDesigner = ({ categories, variables, value, onChange }: PlayerCa
         <button
           className="designer-section-toggle"
           type="button"
-          onClick={() => setShowVariables((prev) => !prev)}
+          onClick={() => setShowObjects((prev) => !prev)}
         >
-          <span>Variables</span>
-          <span>{showVariables ? "Hide" : "Show"}</span>
+          <span>Objects</span>
+          <span>{showObjects ? "Hide" : "Show"}</span>
         </button>
-        {showVariables && (
+        {showObjects && (
           <div className="stack">
             <button
               type="button"
               className="designer-table-header"
-              onClick={() => setShowVariableModal(true)}
+              onClick={() => setShowObjectModal(true)}
             >
-              Owned Variables
-              <span>Select variables</span>
+              Owned Objects
+              <span>Select objects</span>
             </button>
-            {variables.length === 0 ? (
+            {objects.length === 0 ? (
               <p style={{ margin: 0, color: "#6b7280" }}>
-                Add variables in the template to display owned variables here.
+                Add objects in the template to display owned objects here.
               </p>
             ) : (
               <div
                 className="designer-table"
-                style={{ gridTemplateColumns: `repeat(${Math.max(variableGroups.length, 1)}, 1fr)` }}
+                style={{ gridTemplateColumns: `repeat(${Math.max(objectGroups.length, 1)}, 1fr)` }}
               >
                 <div
                   className="designer-table-row designer-table-head"
-                  style={{ gridTemplateColumns: `repeat(${Math.max(variableGroups.length, 1)}, 1fr)` }}
+                  style={{ gridTemplateColumns: `repeat(${Math.max(objectGroups.length, 1)}, 1fr)` }}
                 >
-                  {variableGroups.map(([groupName]) => (
+                  {objectGroups.map(([groupName]) => (
                     <div key={groupName}>{groupName}</div>
                   ))}
                 </div>
                 <div
                   className="designer-table-row"
-                  style={{ gridTemplateColumns: `repeat(${Math.max(variableGroups.length, 1)}, 1fr)` }}
+                  style={{ gridTemplateColumns: `repeat(${Math.max(objectGroups.length, 1)}, 1fr)` }}
                 >
-                  {variableGroups.map(([groupName]) => (
+                  {objectGroups.map(([groupName]) => (
                     <div key={groupName}>
-                      {(groupedOwnedVariables[groupName] || []).length === 0 ? (
+                      {(groupedOwnedObjects[groupName] || []).length === 0 ? (
                         <span className="designer-table-empty">—</span>
                       ) : (
-                        groupedOwnedVariables[groupName]?.map((variable) => (
-                          <div key={variable.id} className="designer-table-item">
-                            {variable.name}
+                        groupedOwnedObjects[groupName]?.map((objectDefinition) => (
+                          <div key={objectDefinition.id} className="designer-table-item">
+                            {objectDefinition.name}
                           </div>
                         ))
                       )}
@@ -328,35 +328,35 @@ const PlayerCardDesigner = ({ categories, variables, value, onChange }: PlayerCa
         )}
       </div>
 
-      {showVariableModal && (
+      {showObjectModal && (
         <div className="modal-backdrop" role="dialog" aria-modal="true">
           <div className="modal stack">
             <div className="inline" style={{ justifyContent: "space-between" }}>
-              <h3 style={{ margin: 0 }}>Select Owned Variables</h3>
-              <button className="button ghost" type="button" onClick={() => setShowVariableModal(false)}>
+              <h3 style={{ margin: 0 }}>Select Owned Objects</h3>
+              <button className="button ghost" type="button" onClick={() => setShowObjectModal(false)}>
                 Close
               </button>
             </div>
             <p style={{ margin: 0, color: "#667085" }}>
-              Choose the variables that should appear on this player card.
+              Choose the objects that should appear on this player card.
             </p>
-            <div className="designer-variable-grid">
-              {variables.map((variable) => (
-                <label key={variable.id} className="designer-variable-item">
+            <div className="designer-object-grid">
+              {objects.map((objectDefinition) => (
+                <label key={objectDefinition.id} className="designer-object-item">
                   <input
                     type="checkbox"
-                    checked={ownedVariableIds.includes(variable.id)}
-                    onChange={() => toggleVariable(variable.id)}
+                    checked={ownedObjectIds.includes(objectDefinition.id)}
+                    onChange={() => toggleObject(objectDefinition.id)}
                   />
                   <span>
-                    {variable.name}
-                    <span className="designer-variable-tag">{variable.category || "Other"}</span>
+                    {objectDefinition.name}
+                    <span className="designer-object-tag">{objectDefinition.category || "Other"}</span>
                   </span>
                 </label>
               ))}
             </div>
             <div className="inline" style={{ justifyContent: "flex-end" }}>
-              <button className="button" type="button" onClick={() => setShowVariableModal(false)}>
+              <button className="button" type="button" onClick={() => setShowObjectModal(false)}>
                 Save Selection
               </button>
             </div>

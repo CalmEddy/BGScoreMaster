@@ -1,4 +1,5 @@
 import { GameTemplate } from "../state/types";
+import { migrateTemplate } from "./migrations";
 
 const TEMPLATE_STORAGE_KEY = "universal-score-keeper-templates-v1";
 
@@ -9,7 +10,9 @@ export const loadTemplates = (): Record<string, GameTemplate> => {
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Record<string, GameTemplate>;
     if (!parsed || typeof parsed !== "object") return {};
-    return parsed;
+    return Object.fromEntries(
+      Object.entries(parsed).map(([id, template]) => [id, migrateTemplate(template)])
+    );
   } catch {
     return {};
   }
@@ -29,7 +32,7 @@ export const importTemplate = (value: string): GameTemplate | null => {
     const parsed = JSON.parse(value) as GameTemplate;
     if (!parsed || typeof parsed !== "object") return null;
     if (!parsed.id || !parsed.name || !parsed.version) return null;
-    return parsed;
+    return migrateTemplate(parsed);
   } catch {
     return null;
   }
@@ -62,12 +65,12 @@ export const validateTemplate = (template: GameTemplate): { valid: boolean; erro
     });
   }
 
-  // Validate variable definitions
-  if (template.variableDefinitions) {
-    template.variableDefinitions.forEach((varDef, index) => {
-      if (!varDef.id) errors.push(`Variable definition ${index} missing ID`);
-      if (!varDef.name) errors.push(`Variable definition ${index} missing name`);
-      if (!varDef.type) errors.push(`Variable definition ${index} missing type`);
+  // Validate object definitions
+  if (template.objectDefinitions) {
+    template.objectDefinitions.forEach((objDef, index) => {
+      if (!objDef.id) errors.push(`Object definition ${index} missing ID`);
+      if (!objDef.name) errors.push(`Object definition ${index} missing name`);
+      if (!objDef.type) errors.push(`Object definition ${index} missing type`);
     });
   }
 
@@ -76,4 +79,3 @@ export const validateTemplate = (template: GameTemplate): { valid: boolean; erro
     errors,
   };
 };
-

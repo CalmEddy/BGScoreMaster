@@ -1,7 +1,5 @@
 import { useState } from "react";
-import { createId } from "../lib/id";
 import { AppAction, AppState, ScoringRule, Session } from "../state/types";
-import { updateSession } from "../state/store";
 import RuleBuilder from "../components/RuleBuilder";
 
 const Rules = ({
@@ -140,4 +138,3 @@ const Rules = ({
 };
 
 export default Rules;
-

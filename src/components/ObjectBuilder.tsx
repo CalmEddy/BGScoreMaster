@@ -1,40 +1,44 @@
 import { useState } from "react";
 import { createId } from "../lib/id";
-import { VariableDefinition, VariableOwnership, VariableActiveWindow, ID } from "../state/types";
-import { getAllCommonVariables, getVariablesByCategory } from "../lib/templateLibrary";
+import { GameObjectDefinition, GameObjectOwnership, GameObjectActiveWindow } from "../state/types";
+import { getAllCommonObjects, getObjectsByCategory } from "../lib/objectLibrary";
 import FormulaEditor from "./FormulaEditor";
 import SetElementManager from "./SetElementManager";
 
-const VariableBuilder = ({
-  variables,
+const ObjectBuilder = ({
+  objects,
   onChange,
 }: {
-  variables: VariableDefinition[];
-  onChange: (variables: VariableDefinition[]) => void;
+  objects: GameObjectDefinition[];
+  onChange: (objects: GameObjectDefinition[]) => void;
 }) => {
   const [showCommon, setShowCommon] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [editing, setEditing] = useState<string | null>(null);
-  const [newVar, setNewVar] = useState<Partial<VariableDefinition>>({
+  const [newVar, setNewVar] = useState<Partial<GameObjectDefinition>>({
     type: "number",
     defaultValue: 0,
   });
+  const ownershipSelectValue =
+    typeof newVar.ownership === "object" ? "object" : newVar.ownership ?? "player";
+  const activeWindowSelectValue =
+    typeof newVar.activeWindow === "object" ? newVar.activeWindow.type : newVar.activeWindow ?? "always";
 
-  const commonVariables = getAllCommonVariables();
-  const commonByCategory = getVariablesByCategory(selectedCategory);
+  const commonObjects = getAllCommonObjects();
+  const commonByCategory = getObjectsByCategory(selectedCategory);
 
-  const handleAddCommon = (commonVar: VariableDefinition) => {
+  const handleAddCommon = (commonObj: GameObjectDefinition) => {
     // Check if already added
-    if (variables.find((v) => v.id === commonVar.id)) {
-      alert("This variable is already added");
+    if (objects.find((v) => v.id === commonObj.id)) {
+      alert("This object is already added");
       return;
     }
-    onChange([...variables, { ...commonVar }]);
+    onChange([...objects, { ...commonObj }]);
   };
 
   const handleAddCustom = () => {
     if (!newVar.name?.trim()) {
-      alert("Please enter a variable name");
+      alert("Please enter an object name");
       return;
     }
     
@@ -44,15 +48,15 @@ const VariableBuilder = ({
       return;
     }
     
-    const variable: VariableDefinition = {
+    const objectDefinition: GameObjectDefinition = {
       id: createId(),
       name: newVar.name.trim(),
-      type: (newVar.type || "number") as VariableDefinition["type"],
+      type: (newVar.type || "number") as GameObjectDefinition["type"],
       defaultValue: newVar.defaultValue,
       min: newVar.min,
       max: newVar.max,
       options: newVar.options,
-      category: newVar.category,
+      category: newVar.category ?? "Custom",
       icon: newVar.icon,
       description: newVar.description,
       ownership: newVar.ownership,
@@ -66,24 +70,24 @@ const VariableBuilder = ({
       setElementTemplate: newVar.setElementTemplate,
       setIds: newVar.setIds,
     };
-    onChange([...variables, variable]);
+    onChange([...objects, objectDefinition]);
     setNewVar({ type: "number", defaultValue: 0 });
   };
   
-  const handleCreateSetElement = (elementDef: VariableDefinition) => {
-    // Add the new element variable to the variables array
-    onChange([...variables, elementDef]);
+  const handleCreateSetElement = (elementDef: GameObjectDefinition) => {
+    // Add the new element object to the objects array
+    onChange([...objects, elementDef]);
   };
 
-  const handleUpdate = (id: string, updates: Partial<VariableDefinition>) => {
-    const updated = variables.map((v) => {
+  const handleUpdate = (id: string, updates: Partial<GameObjectDefinition>) => {
+    const updated = objects.map((v) => {
       if (v.id === id) {
         const updatedVar = { ...v, ...updates };
         
-        // If updating setElements, also update setIds on element variables
+        // If updating setElements, also update setIds on element objects
         if (updates.setElements !== undefined) {
-          // Update setIds on all affected element variables
-          const allVars = variables.map((varItem) => {
+          // Update setIds on all affected element objects
+          const allVars = objects.map((varItem) => {
             const isElement = updates.setElements?.includes(varItem.id);
             const wasElement = v.setElements?.includes(varItem.id);
             
@@ -103,7 +107,7 @@ const VariableBuilder = ({
             return varItem;
           });
           
-          // Replace variables with updated ones
+          // Replace objects with updated ones
           const setVarIndex = allVars.findIndex((v) => v.id === id);
           if (setVarIndex >= 0) {
             allVars[setVarIndex] = updatedVar;
@@ -123,22 +127,22 @@ const VariableBuilder = ({
   };
 
   const handleRemove = (id: string) => {
-    if (!window.confirm("Remove this variable?")) return;
-    onChange(variables.filter((v) => v.id !== id));
+    if (!window.confirm("Remove this object?")) return;
+    onChange(objects.filter((v) => v.id !== id));
   };
 
-  const groupedVariables = variables.reduce((acc, v) => {
+  const groupedObjects = objects.reduce((acc, v) => {
     const cat = v.category || "Other";
     if (!acc[cat]) acc[cat] = [];
     acc[cat].push(v);
     return acc;
-  }, {} as Record<string, VariableDefinition[]>);
+  }, {} as Record<string, GameObjectDefinition[]>);
 
   return (
     <div className="stack">
       <div className="card stack">
         <div className="inline" style={{ justifyContent: "space-between" }}>
-          <div className="card-title">Add Common Variables</div>
+          <div className="card-title">Add Common Objects</div>
           <button className="button secondary" onClick={() => setShowCommon(!showCommon)}>
             {showCommon ? "Hide" : "Show"} Common
           </button>
@@ -162,23 +166,23 @@ const VariableBuilder = ({
               <option value="Status">Status</option>
             </select>
             <div className="list" style={{ maxHeight: "300px", overflowY: "auto" }}>
-              {(selectedCategory === "all" ? commonVariables : commonByCategory)
-                .filter((v) => !variables.find((existing) => existing.id === v.id))
-                .map((commonVar) => (
-                  <div key={commonVar.id} className="card inline" style={{ justifyContent: "space-between" }}>
+              {(selectedCategory === "all" ? commonObjects : commonByCategory)
+                .filter((v) => !objects.find((existing) => existing.id === v.id))
+                .map((commonObj) => (
+                  <div key={commonObj.id} className="card inline" style={{ justifyContent: "space-between" }}>
                     <div>
-                      {commonVar.icon && <span style={{ marginRight: "8px" }}>{commonVar.icon}</span>}
-                      <strong>{commonVar.name}</strong>
+                      {commonObj.icon && <span style={{ marginRight: "8px" }}>{commonObj.icon}</span>}
+                      <strong>{commonObj.name}</strong>
                       <span className="badge" style={{ marginLeft: "8px", fontSize: "0.75rem" }}>
-                        {commonVar.type}
+                        {commonObj.type}
                       </span>
-                      {commonVar.description && (
+                      {commonObj.description && (
                         <p style={{ fontSize: "0.875rem", margin: "4px 0", color: "#6b7280" }}>
-                          {commonVar.description}
+                          {commonObj.description}
                         </p>
                       )}
                     </div>
-                    <button className="button secondary" onClick={() => handleAddCommon(commonVar)}>
+                    <button className="button secondary" onClick={() => handleAddCommon(commonObj)}>
                       Add
                     </button>
                   </div>
@@ -189,7 +193,7 @@ const VariableBuilder = ({
       </div>
 
       <div className="card stack">
-        <div className="card-title">Add Custom Variable</div>
+        <div className="card-title">Add Custom Object</div>
         <div className="stack">
           <div>
             <label className="label">Name *</label>
@@ -197,7 +201,7 @@ const VariableBuilder = ({
               className="input"
               value={newVar.name || ""}
               onChange={(e) => setNewVar({ ...newVar, name: e.target.value })}
-              placeholder="Variable name"
+              placeholder="Object name"
             />
           </div>
           <div>
@@ -206,7 +210,7 @@ const VariableBuilder = ({
               className="input"
               value={newVar.type || "number"}
               onChange={(e) => {
-                const newType = e.target.value as VariableDefinition["type"];
+                const newType = e.target.value as GameObjectDefinition["type"];
                 // Reset set-specific properties when changing away from set type
                 if (newType !== "set") {
                   setNewVar({ ...newVar, type: newType, setType: undefined, setElements: undefined, setElementTemplate: undefined });
@@ -243,6 +247,7 @@ const VariableBuilder = ({
                         id: createId(),
                         name: "",
                         type: "resource",
+                        category: newVar.category ?? "Custom",
                       }) : undefined,
                     });
                   }}
@@ -267,7 +272,7 @@ const VariableBuilder = ({
                         setNewVar({
                           ...newVar,
                           setElementTemplate: {
-                            ...(newVar.setElementTemplate || { id: createId(), name: "", type: "resource" }),
+                            ...(newVar.setElementTemplate || { id: createId(), name: "", type: "resource", category: newVar.category ?? "Custom" }),
                             name: e.target.value,
                           },
                         })
@@ -284,7 +289,7 @@ const VariableBuilder = ({
                         setNewVar({
                           ...newVar,
                           setElementTemplate: {
-                            ...(newVar.setElementTemplate || { id: createId(), name: "", type: "resource" }),
+                            ...(newVar.setElementTemplate || { id: createId(), name: "", type: "resource", category: newVar.category ?? "Custom" }),
                             type: e.target.value as any,
                           },
                         })
@@ -304,7 +309,7 @@ const VariableBuilder = ({
                         setNewVar({
                           ...newVar,
                           setElementTemplate: {
-                            ...(newVar.setElementTemplate || { id: createId(), name: "", type: "resource" }),
+                            ...(newVar.setElementTemplate || { id: createId(), name: "", type: "resource", category: newVar.category ?? "Custom" }),
                             icon: e.target.value || undefined,
                           },
                         })
@@ -317,13 +322,13 @@ const VariableBuilder = ({
               )}
               {newVar.setType === "elements" && (
                 <SetElementManager
-                  setVariable={{
+                  setObject={{
                     ...newVar,
                     id: "temp-set-id",
                     name: newVar.name || "",
                     type: "set",
-                  } as VariableDefinition}
-                  allVariables={variables}
+                  } as GameObjectDefinition}
+                  allObjects={objects}
                   onUpdate={(updates) => {
                     setNewVar({ ...newVar, ...updates });
                   }}
@@ -409,39 +414,35 @@ const VariableBuilder = ({
             <label className="label">Ownership</label>
             <select
               className="input"
-              value={
-                typeof newVar.ownership === "object" && newVar.ownership?.type === "variable"
-                  ? "variable"
-                  : newVar.ownership || "player"
-              }
+              value={ownershipSelectValue}
               onChange={(e) => {
                 const val = e.target.value;
-                if (val === "variable") {
-                  setNewVar({ ...newVar, ownership: { type: "variable", variableId: "" } });
+                if (val === "object") {
+                  setNewVar({ ...newVar, ownership: { type: "object", objectId: "" } });
                 } else {
-                  setNewVar({ ...newVar, ownership: val as VariableOwnership });
+                  setNewVar({ ...newVar, ownership: val as GameObjectOwnership });
                 }
               }}
             >
               <option value="player">Player</option>
               <option value="global">Global</option>
               <option value="inactive">Inactive</option>
-              <option value="variable">Variable Reference</option>
+              <option value="object">Object Reference</option>
             </select>
-            {typeof newVar.ownership === "object" && newVar.ownership?.type === "variable" && (
+            {typeof newVar.ownership === "object" && newVar.ownership?.type === "object" && (
               <select
                 className="input"
                 style={{ marginTop: "8px" }}
-                value={newVar.ownership.variableId}
+                value={newVar.ownership.objectId}
                 onChange={(e) =>
                   setNewVar({
                     ...newVar,
-                    ownership: { type: "variable", variableId: e.target.value },
+                    ownership: { type: "object", objectId: e.target.value },
                   })
                 }
               >
-                <option value="">Select variable...</option>
-                {variables.map((v) => (
+                <option value="">Select object...</option>
+                {objects.map((v) => (
                   <option key={v.id} value={v.id}>
                     {v.name}
                   </option>
@@ -454,43 +455,39 @@ const VariableBuilder = ({
             <label className="label">Active Window</label>
             <select
               className="input"
-              value={
-                typeof newVar.activeWindow === "object" && newVar.activeWindow?.type
-                  ? newVar.activeWindow.type
-                  : newVar.activeWindow || "always"
-              }
+              value={activeWindowSelectValue}
               onChange={(e) => {
                 const val = e.target.value;
                 if (val === "round") {
                   setNewVar({ ...newVar, activeWindow: { type: "round" } });
                 } else if (val === "phase") {
                   setNewVar({ ...newVar, activeWindow: { type: "phase" } });
-                } else if (val === "variable") {
-                  setNewVar({ ...newVar, activeWindow: { type: "variable", variableId: "" } });
+                } else if (val === "object") {
+                  setNewVar({ ...newVar, activeWindow: { type: "object", objectId: "" } });
                 } else {
-                  setNewVar({ ...newVar, activeWindow: val as VariableActiveWindow });
+                  setNewVar({ ...newVar, activeWindow: val as GameObjectActiveWindow });
                 }
               }}
             >
               <option value="always">Always</option>
               <option value="round">Round</option>
               <option value="phase">Phase</option>
-              <option value="variable">Variable Reference</option>
+              <option value="object">Object Reference</option>
             </select>
-            {typeof newVar.activeWindow === "object" && newVar.activeWindow?.type === "variable" && (
+            {typeof newVar.activeWindow === "object" && newVar.activeWindow?.type === "object" && (
               <select
                 className="input"
                 style={{ marginTop: "8px" }}
-                value={newVar.activeWindow.variableId}
+                value={newVar.activeWindow.objectId}
                 onChange={(e) =>
                   setNewVar({
                     ...newVar,
-                    activeWindow: { type: "variable", variableId: e.target.value },
+                    activeWindow: { type: "object", objectId: e.target.value },
                   })
                 }
               >
-                <option value="">Select variable...</option>
-                {variables.map((v) => (
+                <option value="">Select object...</option>
+                {objects.map((v) => (
                   <option key={v.id} value={v.id}>
                     {v.name}
                   </option>
@@ -502,13 +499,13 @@ const VariableBuilder = ({
           <div>
             <label className="label">Calculation Formula (optional)</label>
             <p style={{ fontSize: "0.875rem", color: "#6b7280", marginBottom: "8px" }}>
-              Formula to compute this variable's value. Use {`{variableName}`} or {`{categoryName}`} to reference other values.
+              Formula to compute this object's value. Use {`{objectName}`} or {`{categoryName}`} to reference other values.
             </p>
             <FormulaEditor
               formula={newVar.calculation || ""}
               onChange={(formula) => setNewVar({ ...newVar, calculation: formula })}
               categories={{}}
-              variables={variables}
+              objects={objects}
             />
           </div>
 
@@ -521,152 +518,152 @@ const VariableBuilder = ({
               formula={newVar.scoreImpact || ""}
               onChange={(formula) => setNewVar({ ...newVar, scoreImpact: formula })}
               categories={{}}
-              variables={variables}
+              objects={objects}
             />
           </div>
 
           <button className="button" onClick={handleAddCustom}>
-            Add Custom Variable
+            Add Custom Object
           </button>
         </div>
       </div>
 
       <div className="card stack">
-        <div className="card-title">Defined Variables</div>
-        {variables.length === 0 ? (
-          <p>No variables defined yet.</p>
+        <div className="card-title">Defined Objects</div>
+        {objects.length === 0 ? (
+          <p>No objects defined yet.</p>
         ) : (
-          Object.entries(groupedVariables).map(([category, vars]) => (
+          Object.entries(groupedObjects).map(([category, vars]) => (
             <div key={category} style={{ marginBottom: "16px" }}>
               <h4 style={{ margin: "0 0 8px 0", fontSize: "1rem" }}>{category}</h4>
               <div className="list">
-                {vars.map((variable) => (
-                  <div key={variable.id} className="card" style={{ marginBottom: "8px" }}>
+                {vars.map((objectDefinition) => {
+                  const editOwnershipValue =
+                    typeof objectDefinition.ownership === "object" ? "object" : objectDefinition.ownership ?? "player";
+                  const editActiveWindowValue =
+                    typeof objectDefinition.activeWindow === "object"
+                      ? objectDefinition.activeWindow.type
+                      : objectDefinition.activeWindow ?? "always";
+
+                  return (
+                    <div key={objectDefinition.id} className="card" style={{ marginBottom: "8px" }}>
                     <div className="inline" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
                       <div style={{ flex: 1 }}>
-                        {variable.icon && <span style={{ marginRight: "8px" }}>{variable.icon}</span>}
-                        <strong>{variable.name}</strong>
+                        {objectDefinition.icon && <span style={{ marginRight: "8px" }}>{objectDefinition.icon}</span>}
+                        <strong>{objectDefinition.name}</strong>
                         <span className="badge" style={{ marginLeft: "8px", fontSize: "0.75rem" }}>
-                          {variable.type}
+                          {objectDefinition.type}
                         </span>
-                        {variable.description && (
+                        {objectDefinition.description && (
                           <p style={{ fontSize: "0.875rem", margin: "4px 0", color: "#6b7280" }}>
-                            {variable.description}
+                            {objectDefinition.description}
                           </p>
                         )}
                         <div style={{ fontSize: "0.875rem", color: "#6b7280", marginTop: "4px" }}>
-                          {variable.ownership && (
+                          {objectDefinition.ownership && (
                             <span style={{ marginRight: "12px" }}>
-                              Ownership: {typeof variable.ownership === "string" ? variable.ownership : "variable"}
+                              Ownership: {typeof objectDefinition.ownership === "string" ? objectDefinition.ownership : "object"}
                             </span>
                           )}
-                          {variable.activeWindow && (
+                          {objectDefinition.activeWindow && (
                             <span style={{ marginRight: "12px" }}>
-                              Active: {typeof variable.activeWindow === "string" ? variable.activeWindow : variable.activeWindow.type}
+                              Active: {typeof objectDefinition.activeWindow === "string" ? objectDefinition.activeWindow : objectDefinition.activeWindow.type}
                             </span>
                           )}
-                          {variable.calculation && <span style={{ marginRight: "12px" }}>Has calculation</span>}
-                          {variable.scoreImpact && <span>Has score impact</span>}
+                          {objectDefinition.calculation && <span style={{ marginRight: "12px" }}>Has calculation</span>}
+                          {objectDefinition.scoreImpact && <span>Has score impact</span>}
                         </div>
-                        {variable.defaultValue !== undefined && (
-                          <small style={{ color: "#9ca3af" }}>Default: {String(variable.defaultValue)}</small>
+                        {objectDefinition.defaultValue !== undefined && (
+                          <small style={{ color: "#9ca3af" }}>Default: {String(objectDefinition.defaultValue)}</small>
                         )}
-                        {variable.type === "set" && (
+                        {objectDefinition.type === "set" && (
                           <div style={{ fontSize: "0.875rem", color: "#6b7280", marginTop: "4px" }}>
-                            Set Type: {variable.setType || "not set"}
-                            {variable.setType === "elements" && variable.setElements && (
-                              <span> • {variable.setElements.length} elements</span>
+                            Set Type: {objectDefinition.setType || "not set"}
+                            {objectDefinition.setType === "elements" && objectDefinition.setElements && (
+                              <span> • {objectDefinition.setElements.length} elements</span>
                             )}
-                            {variable.setType === "identical" && variable.setElementTemplate && (
-                              <span> • Element: {variable.setElementTemplate.name}</span>
+                            {objectDefinition.setType === "identical" && objectDefinition.setElementTemplate && (
+                              <span> • Element: {objectDefinition.setElementTemplate.name}</span>
                             )}
                           </div>
                         )}
                       </div>
-                      <button className="button danger" onClick={() => handleRemove(variable.id)}>
+                      <button className="button danger" onClick={() => handleRemove(objectDefinition.id)}>
                         Remove
                       </button>
                     </div>
-                    {editing === variable.id && variable.type === "set" && variable.setType === "elements" && (
+                    {editing === objectDefinition.id && objectDefinition.type === "set" && objectDefinition.setType === "elements" && (
                       <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid #e5e7eb" }}>
                         <SetElementManager
-                          setVariable={variable}
-                          allVariables={variables}
-                          onUpdate={(updates) => handleUpdate(variable.id, updates)}
+                          setObject={objectDefinition}
+                          allObjects={objects}
+                          onUpdate={(updates) => handleUpdate(objectDefinition.id, updates)}
                           onCreateElement={handleCreateSetElement}
                         />
                       </div>
                     )}
-                    {editing === variable.id && (
+                    {editing === objectDefinition.id && (
                       <div className="stack" style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid #e5e7eb" }}>
                         <div>
                           <label className="label">Ownership</label>
                           <select
                             className="input"
-                            value={
-                              typeof variable.ownership === "object" && variable.ownership?.type === "variable"
-                                ? "variable"
-                                : variable.ownership || "player"
-                            }
+                            value={editOwnershipValue}
                             onChange={(e) => {
                               const val = e.target.value;
-                              if (val === "variable") {
-                                handleUpdate(variable.id, { ownership: { type: "variable", variableId: "" } });
+                              if (val === "object") {
+                                handleUpdate(objectDefinition.id, { ownership: { type: "object", objectId: "" } });
                               } else {
-                                handleUpdate(variable.id, { ownership: val as VariableOwnership });
+                                handleUpdate(objectDefinition.id, { ownership: val as GameObjectOwnership });
                               }
                             }}
                           >
                             <option value="player">Player</option>
                             <option value="global">Global</option>
                             <option value="inactive">Inactive</option>
-                            <option value="variable">Variable Reference</option>
+                            <option value="object">Object Reference</option>
                           </select>
                         </div>
                         <div>
                           <label className="label">Active Window</label>
                           <select
                             className="input"
-                            value={
-                              typeof variable.activeWindow === "object" && variable.activeWindow?.type
-                                ? variable.activeWindow.type
-                                : variable.activeWindow || "always"
-                            }
+                            value={editActiveWindowValue}
                             onChange={(e) => {
                               const val = e.target.value;
                               if (val === "round") {
-                                handleUpdate(variable.id, { activeWindow: { type: "round" } });
+                                handleUpdate(objectDefinition.id, { activeWindow: { type: "round" } });
                               } else if (val === "phase") {
-                                handleUpdate(variable.id, { activeWindow: { type: "phase" } });
-                              } else if (val === "variable") {
-                                handleUpdate(variable.id, { activeWindow: { type: "variable", variableId: "" } });
+                                handleUpdate(objectDefinition.id, { activeWindow: { type: "phase" } });
+                              } else if (val === "object") {
+                                handleUpdate(objectDefinition.id, { activeWindow: { type: "object", objectId: "" } });
                               } else {
-                                handleUpdate(variable.id, { activeWindow: val as VariableActiveWindow });
+                                handleUpdate(objectDefinition.id, { activeWindow: val as GameObjectActiveWindow });
                               }
                             }}
                           >
                             <option value="always">Always</option>
                             <option value="round">Round</option>
                             <option value="phase">Phase</option>
-                            <option value="variable">Variable Reference</option>
+                            <option value="object">Object Reference</option>
                           </select>
                         </div>
                         <div>
                           <label className="label">Calculation Formula</label>
                           <FormulaEditor
-                            formula={variable.calculation || ""}
-                            onChange={(formula) => handleUpdate(variable.id, { calculation: formula })}
+                            formula={objectDefinition.calculation || ""}
+                            onChange={(formula) => handleUpdate(objectDefinition.id, { calculation: formula })}
                             categories={{}}
-                            variables={variables}
+                            objects={objects}
                           />
                         </div>
                         <div>
                           <label className="label">Score Impact Formula</label>
                           <FormulaEditor
-                            formula={variable.scoreImpact || ""}
-                            onChange={(formula) => handleUpdate(variable.id, { scoreImpact: formula })}
+                            formula={objectDefinition.scoreImpact || ""}
+                            onChange={(formula) => handleUpdate(objectDefinition.id, { scoreImpact: formula })}
                             categories={{}}
-                            variables={variables}
+                            objects={objects}
                           />
                         </div>
                         <button className="button secondary" onClick={() => setEditing(null)}>
@@ -674,17 +671,18 @@ const VariableBuilder = ({
                         </button>
                       </div>
                     )}
-                    {editing !== variable.id && (
+                    {editing !== objectDefinition.id && (
                       <button
                         className="button secondary"
                         style={{ marginTop: "8px" }}
-                        onClick={() => setEditing(variable.id)}
+                        onClick={() => setEditing(objectDefinition.id)}
                       >
                         Edit Advanced
                       </button>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))
@@ -694,5 +692,4 @@ const VariableBuilder = ({
   );
 };
 
-export default VariableBuilder;
-
+export default ObjectBuilder;

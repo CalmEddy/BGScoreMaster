@@ -10,12 +10,10 @@ type CategoryNode = CategoryTemplate & {
 const CategoryBuilder = ({
   categories,
   onChange,
-  variables,
   onEdit,
 }: {
   categories: CategoryTemplate[];
   onChange: (categories: CategoryTemplate[]) => void;
-  variables?: string[];
   onEdit?: (category: CategoryTemplate) => void;
 }) => {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -139,7 +137,7 @@ const CategoryBuilder = ({
             )}
             {node.displayType !== "sum" && (
               <span className="badge" style={{ fontSize: "0.75rem" }}>
-                {node.displayType === "formula" ? "Formula" : `${node.weight}x`}
+                {node.displayType === "formula" ? "Formula" : `${node.defaultWeight ?? 1}x`}
               </span>
             )}
             {node.required && (
@@ -152,7 +150,6 @@ const CategoryBuilder = ({
             <button
               className="button secondary"
               onClick={() => {
-                const newId = createId();
                 setParentForNew(node.id);
                 setExpanded((prev) => new Set(prev).add(node.id));
               }}
@@ -234,4 +231,3 @@ const CategoryBuilder = ({
 };
 
 export default CategoryBuilder;
-

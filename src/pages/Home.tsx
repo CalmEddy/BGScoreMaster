@@ -79,7 +79,7 @@ const Home = ({
           </p>
           <ul style={{ margin: 0, paddingLeft: "18px", color: "#6b7280" }}>
             <li>Create or open a session with players and a scoring template.</li>
-            <li>Enter variables and scoring entries each round or turn as needed.</li>
+            <li>Enter objects and scoring entries each round or turn as needed.</li>
             <li>Use manual adjustments or overrides when you need to correct totals.</li>
           </ul>
         </section>
@@ -184,4 +184,3 @@ const Home = ({
 };
 
 export default Home;
-

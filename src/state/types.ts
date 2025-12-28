@@ -1,3 +1,5 @@
+import { GameObject } from "../types/GameObject";
+
 export type ID = string;
 
 export type Session = {
@@ -10,8 +12,8 @@ export type Session = {
     scoreDirection: "higherWins" | "lowerWins";
     allowNegative: boolean;
     showRoundControls?: boolean;
-    showSessionVariables?: boolean;
-    showPlayerVariables?: boolean;
+    showSessionObjects?: boolean;
+    showPlayerObjects?: boolean;
     showQuickAdd?: boolean;
   };
   playerIds: ID[];
@@ -19,7 +21,7 @@ export type Session = {
   roundIds: ID[];
   ruleIds: ID[];
   templateId?: ID;
-  variableValueIds?: ID[];
+  objectValueIds?: ID[];
   activeMechanicIds?: ID[];
 };
 
@@ -102,39 +104,35 @@ export type RuleTemplate = {
   required: boolean;
 };
 
-export type VariableOwnership =
+export type GameObjectOwnership =
   | "inactive"
   | "player"
   | "global"
-  | { type: "variable"; variableId: ID };
+  | { type: "object"; objectId: ID };
 
-export type VariableActiveWindow =
+export type GameObjectActiveWindow =
   | "always"
   | { type: "round"; roundId?: ID; roundIndex?: number }
   | { type: "phase"; phaseId?: ID }
-  | { type: "variable"; variableId: ID };
+  | { type: "object"; objectId: ID };
 
-export type VariableDefinition = {
-  id: ID;
-  name: string;
+export type GameObjectDefinition = GameObject & {
   type: "number" | "boolean" | "string" | "resource" | "territory" | "card" | "custom" | "set";
   defaultValue?: any;
   min?: number;
   max?: number;
   options?: string[];
-  category?: string;
-  icon?: string;
   description?: string;
-  ownership?: VariableOwnership;
-  activeWindow?: VariableActiveWindow;
+  ownership?: GameObjectOwnership;
+  activeWindow?: GameObjectActiveWindow;
   calculation?: string;
   scoreImpact?: string;
   state?: string;
   // Set-specific properties
-  setType?: "identical" | "elements"; // Type of set
-  setElements?: ID[]; // For "elements" sets: array of variable definition IDs
-  setElementTemplate?: VariableDefinition; // For "identical" sets: template for the repeated element
-  setIds?: ID[]; // For element variables: which sets they belong to
+  setType?: "identical" | "elements";
+  setElements?: ID[];
+  setElementTemplate?: GameObjectDefinition;
+  setIds?: ID[];
 };
 
 export type GameMechanic = {
@@ -146,7 +144,7 @@ export type GameMechanic = {
 };
 
 export type SetElementValue = {
-  elementVariableDefinitionId: ID;
+  elementObjectDefinitionId: ID;
   quantity: number; // For identical sets, this is the count
   properties?: Record<string, any>; // Optional properties for each element
 };
@@ -155,10 +153,10 @@ export type SetValue =
   | number  // For identical sets: simple count
   | SetElementValue[]; // For elements sets: array of element values
 
-export type VariableValue = {
+export type GameObjectValue = {
   id: ID;
   sessionId: ID;
-  variableDefinitionId: ID;
+  objectDefinitionId: ID;
   playerId?: ID;
   value: any | SetValue; // Extend to support SetValue
   updatedAt: number;
@@ -168,9 +166,9 @@ export type VariableValue = {
   lastComputedAt?: number;
 };
 
-export type VariableHistory = {
+export type GameObjectHistory = {
   id: ID;
-  variableValueId: ID;
+  objectValueId: ID;
   value: any;
   previousValue: any;
   timestamp: number;
@@ -187,7 +185,7 @@ export type PlayerCardActionButton = {
 
 export type PlayerCardConfig = {
   actionButtons: PlayerCardActionButton[];
-  variableIds: ID[];
+  objectIds: ID[];
 };
 
 export type GameTemplate = {
@@ -210,7 +208,7 @@ export type GameTemplate = {
   };
   categoryTemplates: CategoryTemplate[];
   ruleTemplates: RuleTemplate[];
-  variableDefinitions: VariableDefinition[];
+  objectDefinitions: GameObjectDefinition[];
   mechanics: GameMechanic[];
   uiConfig?: {
     quickValues?: number[];
@@ -221,6 +219,7 @@ export type GameTemplate = {
 };
 
 export type AppState = {
+  schemaVersion?: number;
   sessions: Record<ID, Session>;
   players: Record<ID, Player>;
   categories: Record<ID, Category>;
@@ -228,8 +227,8 @@ export type AppState = {
   entries: Record<ID, ScoreEntry>;
   rules: Record<ID, ScoringRule>;
   templates: Record<ID, GameTemplate>;
-  variableValues: Record<ID, VariableValue>;
-  variableHistory?: Record<ID, VariableHistory[]>;
+  objectValues: Record<ID, GameObjectValue>;
+  objectHistory?: Record<ID, GameObjectHistory[]>;
   activeSessionId?: ID;
   onboarding?: {
     completed: boolean;
@@ -259,14 +258,13 @@ export type AppAction =
   | { type: "template/update"; payload: GameTemplate }
   | { type: "template/remove"; payload: { templateId: ID } }
   | { type: "template/duplicate"; payload: { templateId: ID; newId: ID; newName: string } }
-  | { type: "variable/set"; payload: VariableValue }
-  | { type: "variable/update"; payload: VariableValue }
-  | { type: "variable/increment"; payload: { variableValueId: ID; amount: number } }
-  | { type: "variable/reset"; payload: { variableValueId: ID; defaultValue: any } }
-  | { type: "variable/history-add"; payload: VariableHistory }
-  | { type: "variable/recompute"; payload: { variableValueId: ID } }
+  | { type: "object/set"; payload: GameObjectValue }
+  | { type: "object/update"; payload: GameObjectValue }
+  | { type: "object/increment"; payload: { objectValueId: ID; amount: number } }
+  | { type: "object/reset"; payload: { objectValueId: ID; defaultValue: any } }
+  | { type: "object/history-add"; payload: GameObjectHistory }
+  | { type: "object/recompute"; payload: { objectValueId: ID } }
   | { type: "state/replace"; payload: AppState }
   | { type: "onboarding/complete" }
   | { type: "onboarding/set-step"; payload: number }
   | { type: "onboarding/dismiss-tooltip"; payload: string };
-

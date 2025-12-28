@@ -1,6 +1,6 @@
-import { VariableDefinition } from "../state/types";
+import { GameObjectDefinition } from "../state/types";
 
-export const COMMON_VARIABLE_TYPES: Record<string, VariableDefinition[]> = {
+export const COMMON_OBJECT_TYPES: Record<string, GameObjectDefinition[]> = {
   Resources: [
     { id: "wood", name: "Wood", type: "resource", defaultValue: 0, min: 0, icon: "🪵", category: "Resources" },
     { id: "stone", name: "Stone", type: "resource", defaultValue: 0, min: 0, icon: "🪨", category: "Resources" },
@@ -46,7 +46,7 @@ export const COMMON_VARIABLE_TYPES: Record<string, VariableDefinition[]> = {
       name: "Wood Resources", 
       type: "set", 
       setType: "identical",
-      setElementTemplate: { id: "wood_element", name: "Wood", type: "resource", icon: "🪵" },
+      setElementTemplate: { id: "wood_element", name: "Wood", type: "resource", icon: "🪵", category: "Resources" },
       defaultValue: 0, 
       min: 0, 
       icon: "🪵", 
@@ -77,15 +77,14 @@ export const COMMON_VARIABLE_TYPES: Record<string, VariableDefinition[]> = {
   ],
 };
 
-export const getAllCommonVariables = (): VariableDefinition[] => {
-  return Object.values(COMMON_VARIABLE_TYPES).flat();
+export const getAllCommonObjects = (): GameObjectDefinition[] => {
+  return Object.values(COMMON_OBJECT_TYPES).flat();
 };
 
-export const getVariablesByCategory = (category: string): VariableDefinition[] => {
-  return COMMON_VARIABLE_TYPES[category] || [];
+export const getObjectsByCategory = (category: string): GameObjectDefinition[] => {
+  return COMMON_OBJECT_TYPES[category] || [];
 };
 
-export const getVariableById = (id: string): VariableDefinition | undefined => {
-  return getAllCommonVariables().find((v) => v.id === id);
+export const getObjectById = (id: string): GameObjectDefinition | undefined => {
+  return getAllCommonObjects().find((v) => v.id === id);
 };
-

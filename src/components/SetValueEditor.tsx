@@ -1,19 +1,19 @@
 import { useState } from "react";
-import { VariableDefinition, VariableValue, SetValue, SetElementValue, ID } from "../state/types";
+import { GameObjectDefinition, GameObjectValue, SetValue, ID } from "../state/types";
 import Modal from "./Modal";
 
 type SetValueEditorProps = {
-  variable: VariableValue;
-  definition: VariableDefinition;
-  allVariableDefinitions: VariableDefinition[];
+  objectValue: GameObjectValue;
+  definition: GameObjectDefinition;
+  allObjectDefinitions: GameObjectDefinition[];
   onSave: (value: SetValue) => void;
   onClose: () => void;
 };
 
 const SetValueEditor = ({
-  variable,
+  objectValue,
   definition,
-  allVariableDefinitions,
+  allObjectDefinitions,
   onSave,
   onClose,
 }: SetValueEditorProps) => {
@@ -22,7 +22,7 @@ const SetValueEditor = ({
   }
 
   // Get current value, defaulting appropriately
-  const currentValue: SetValue = variable.value as SetValue ?? (definition.setType === "identical" ? 0 : []);
+  const currentValue: SetValue = objectValue.value as SetValue ?? (definition.setType === "identical" ? 0 : []);
 
   const [value, setValue] = useState<SetValue>(currentValue);
 
@@ -88,12 +88,12 @@ const SetValueEditor = ({
   
   // Get element definitions
   const elementDefinitions = setElements
-    .map((id) => allVariableDefinitions.find((v) => v.id === id))
-    .filter(Boolean) as VariableDefinition[];
+    .map((id) => allObjectDefinitions.find((v) => v.id === id))
+    .filter(Boolean) as GameObjectDefinition[];
 
   const updateElementQuantity = (elementDefId: ID, quantity: number) => {
     const updated = [...elementValues];
-    const index = updated.findIndex((ev) => ev.elementVariableDefinitionId === elementDefId);
+    const index = updated.findIndex((ev) => ev.elementObjectDefinitionId === elementDefId);
     
     if (quantity <= 0) {
       // Remove element if quantity is 0 or less
@@ -104,7 +104,7 @@ const SetValueEditor = ({
       if (index >= 0) {
         updated[index] = { ...updated[index], quantity };
       } else {
-        updated.push({ elementVariableDefinitionId: elementDefId, quantity });
+        updated.push({ elementObjectDefinitionId: elementDefId, quantity });
       }
     }
     
@@ -112,7 +112,7 @@ const SetValueEditor = ({
   };
 
   const getElementQuantity = (elementDefId: ID): number => {
-    const elementValue = elementValues.find((ev) => ev.elementVariableDefinitionId === elementDefId);
+    const elementValue = elementValues.find((ev) => ev.elementObjectDefinitionId === elementDefId);
     return elementValue?.quantity || 0;
   };
 
@@ -169,7 +169,7 @@ const SetValueEditor = ({
         </div>
         {elementDefinitions.length === 0 && (
           <p style={{ fontSize: "0.875rem", color: "#6b7280", textAlign: "center", padding: "24px" }}>
-            No elements defined for this set. Add elements in the variable builder.
+            No elements defined for this set. Add elements in the object builder.
           </p>
         )}
         <div className="inline" style={{ gap: "8px", marginTop: "16px" }}>
@@ -186,4 +186,3 @@ const SetValueEditor = ({
 };
 
 export default SetValueEditor;
-

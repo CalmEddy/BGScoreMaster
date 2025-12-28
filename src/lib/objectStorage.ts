@@ -1,130 +1,130 @@
-import { AppState, VariableDefinition, VariableValue, Player, Session, VariableOwnership, VariableActiveWindow, ID, SetValue, SetElementValue } from "../state/types";
-import { getVariableState as getVarState, evaluateActiveWindow } from "./variableCalculator";
+import { AppState, GameObjectDefinition, GameObjectValue, Player, GameObjectOwnership, ID, SetElementValue } from "../state/types";
+import { getGameObjectState as getObjState, evaluateActiveWindow } from "./objectCalculator";
 
-export const getPlayerVariables = (
+export const getPlayerObjects = (
   state: AppState,
   sessionId: string,
   playerId: string
-): VariableValue[] => {
+): GameObjectValue[] => {
   const session = state.sessions[sessionId];
-  if (!session || !session.variableValueIds) return [];
+  if (!session || !session.objectValueIds) return [];
 
-  return session.variableValueIds
-    .map((id) => state.variableValues[id])
+  return session.objectValueIds
+    .map((id) => state.objectValues[id])
     .filter((v) => v && v.playerId === playerId);
 };
 
-export const getSessionVariables = (
+export const getSessionObjects = (
   state: AppState,
   sessionId: string
-): VariableValue[] => {
+): GameObjectValue[] => {
   const session = state.sessions[sessionId];
-  if (!session || !session.variableValueIds) return [];
+  if (!session || !session.objectValueIds) return [];
 
-  return session.variableValueIds
-    .map((id) => state.variableValues[id])
+  return session.objectValueIds
+    .map((id) => state.objectValues[id])
     .filter((v) => v && !v.playerId);
 };
 
-export const getAllVariables = (
+export const getAllObjects = (
   state: AppState,
   sessionId: string
-): VariableValue[] => {
+): GameObjectValue[] => {
   const session = state.sessions[sessionId];
-  if (!session || !session.variableValueIds) return [];
+  if (!session || !session.objectValueIds) return [];
 
-  return session.variableValueIds
-    .map((id) => state.variableValues[id])
+  return session.objectValueIds
+    .map((id) => state.objectValues[id])
     .filter(Boolean);
 };
 
-export const getVariableByDefinition = (
+export const getObjectByDefinition = (
   state: AppState,
   sessionId: string,
-  variableDefinitionId: string,
+  objectDefinitionId: string,
   playerId?: string
-): VariableValue | undefined => {
+): GameObjectValue | undefined => {
   const session = state.sessions[sessionId];
-  if (!session || !session.variableValueIds) return undefined;
+  if (!session || !session.objectValueIds) return undefined;
 
-  return session.variableValueIds
-    .map((id) => state.variableValues[id])
+  return session.objectValueIds
+    .map((id) => state.objectValues[id])
     .find(
       (v) =>
         v &&
-        v.variableDefinitionId === variableDefinitionId &&
+        v.objectDefinitionId === objectDefinitionId &&
         v.playerId === playerId
     );
 };
 
-export const getVariableValue = (
+export const getObjectValue = (
   state: AppState,
   sessionId: string,
-  variableDefinitionId: string,
+  objectDefinitionId: string,
   playerId?: string
 ): any => {
-  const variable = getVariableByDefinition(state, sessionId, variableDefinitionId, playerId);
-  if (!variable) return undefined;
+  const objectValue = getObjectByDefinition(state, sessionId, objectDefinitionId, playerId);
+  if (!objectValue) return undefined;
   
-  // If variable has computed value, return that
-  if (variable.computedValue !== undefined) {
-    return variable.computedValue;
+  // If object has computed value, return that
+  if (objectValue.computedValue !== undefined) {
+    return objectValue.computedValue;
   }
   
-  return variable.value;
+  return objectValue.value;
 };
 
 /**
- * Gets the state of a variable (re-export from variableCalculator)
+ * Gets the state of an object (re-export from objectCalculator)
  */
-export { getVarState as getVariableState };
+export { getObjState as getGameObjectState };
 
 /**
- * Filters variables by ownership type
+ * Filters objects by ownership type
  */
-export const getVariablesByOwnership = (
+export const getObjectsByOwnership = (
   state: AppState,
   sessionId: string,
-  ownership: VariableOwnership
-): VariableValue[] => {
+  ownership: GameObjectOwnership
+): GameObjectValue[] => {
   const session = state.sessions[sessionId];
-  if (!session || !session.variableValueIds) return [];
+  if (!session || !session.objectValueIds) return [];
 
   const template = session.templateId ? state.templates[session.templateId] : undefined;
   if (!template) return [];
 
-  return session.variableValueIds
-    .map((id) => state.variableValues[id])
+  return session.objectValueIds
+    .map((id) => state.objectValues[id])
     .filter((v) => {
       if (!v) return false;
-      const varDef = template.variableDefinitions.find((vd) => vd.id === v.variableDefinitionId);
-      if (!varDef) return false;
-      const varOwnership = varDef.ownership || (varDef.type === "string" ? "global" : "player");
-      return varOwnership === ownership;
+      const objDef = template.objectDefinitions.find((vd) => vd.id === v.objectDefinitionId);
+      if (!objDef) return false;
+      const objOwnership = objDef.ownership || (objDef.type === "string" ? "global" : "player");
+      return objOwnership === ownership;
     });
 };
 
 /**
- * Filters variables by active window
+ * Filters objects by active window
  */
-export const getActiveVariables = (
+export const getActiveObjects = (
   state: AppState,
   sessionId: string,
   currentRoundId?: ID,
   playerId?: ID
-): VariableValue[] => {
+): GameObjectValue[] => {
   const session = state.sessions[sessionId];
-  if (!session || !session.variableValueIds) return [];
+  if (!session || !session.objectValueIds) return [];
 
   const template = session.templateId ? state.templates[session.templateId] : undefined;
   if (!template) return [];
 
-  return session.variableValueIds
-    .map((id) => state.variableValues[id])
+  return session.objectValueIds
+    .map((id) => state.objectValues[id])
     .filter((v) => {
       if (!v) return false;
-      const varDef = template.variableDefinitions.find((vd) => vd.id === v.variableDefinitionId);
-      if (!varDef) return false;
+      const objDef = template.objectDefinitions.find((vd) => vd.id === v.objectDefinitionId);
+      if (!objDef) return false;
       
       const context = {
         state,
@@ -133,55 +133,55 @@ export const getActiveVariables = (
         currentRoundId,
       };
       
-      return evaluateActiveWindow(varDef, context);
+      return evaluateActiveWindow(objDef, context);
     });
 };
 
-export const initializeVariablesFromTemplate = (
-  template: { variableDefinitions: VariableDefinition[] },
+export const initializeObjectsFromTemplate = (
+  template: { objectDefinitions: GameObjectDefinition[] },
   sessionId: string,
   players: Player[]
-): VariableValue[] => {
-  const variables: VariableValue[] = [];
+): GameObjectValue[] => {
+  const objects: GameObjectValue[] = [];
   const now = Date.now();
 
-  template.variableDefinitions.forEach((varDef) => {
+  template.objectDefinitions.forEach((objDef) => {
     // Use ownership property if defined, otherwise fall back to heuristics
-    const ownership = varDef.ownership || (varDef.type === "string" ? "global" : "player");
+    const ownership = objDef.ownership || (objDef.type === "string" ? "global" : "player");
     
     if (ownership === "global" || ownership === "inactive") {
-      // Create one session-level variable
-      variables.push({
-        id: `${varDef.id}-session-${sessionId}`,
+      // Create one session-level object
+      objects.push({
+        id: `${objDef.id}-session-${sessionId}`,
         sessionId,
-        variableDefinitionId: varDef.id,
+        objectDefinitionId: objDef.id,
         playerId: undefined,
-        value: varDef.defaultValue ?? getDefaultValueForType(varDef.type, varDef),
+        value: objDef.defaultValue ?? getDefaultValueForType(objDef.type, objDef),
         updatedAt: now,
         updatedBy: "manual",
       });
     } else if (ownership === "player") {
-      // Create per-player variables
+      // Create per-player objects
       players.forEach((player) => {
-        variables.push({
-          id: `${varDef.id}-${player.id}`,
+        objects.push({
+          id: `${objDef.id}-${player.id}`,
           sessionId,
-          variableDefinitionId: varDef.id,
+          objectDefinitionId: objDef.id,
           playerId: player.id,
-          value: varDef.defaultValue ?? getDefaultValueForType(varDef.type, varDef),
+          value: objDef.defaultValue ?? getDefaultValueForType(objDef.type, objDef),
           updatedAt: now,
           updatedBy: "manual",
         });
       });
-    } else if (ownership.type === "variable") {
-      // Variable-based ownership - initialize as inactive for now
+    } else if (ownership.type === "object") {
+      // Object-based ownership - initialize as inactive for now
       // Will be evaluated dynamically
-      variables.push({
-        id: `${varDef.id}-session-${sessionId}`,
+      objects.push({
+        id: `${objDef.id}-session-${sessionId}`,
         sessionId,
-        variableDefinitionId: varDef.id,
+        objectDefinitionId: objDef.id,
         playerId: undefined,
-        value: varDef.defaultValue ?? getDefaultValueForType(varDef.type, varDef),
+        value: objDef.defaultValue ?? getDefaultValueForType(objDef.type, objDef),
         updatedAt: now,
         updatedBy: "manual",
         state: "inactive",
@@ -189,10 +189,10 @@ export const initializeVariablesFromTemplate = (
     }
   });
 
-  return variables;
+  return objects;
 };
 
-const getDefaultValueForType = (type: VariableDefinition["type"], varDef?: VariableDefinition): any => {
+const getDefaultValueForType = (type: GameObjectDefinition["type"], objDef?: GameObjectDefinition): any => {
   switch (type) {
     case "number":
     case "resource":
@@ -206,7 +206,7 @@ const getDefaultValueForType = (type: VariableDefinition["type"], varDef?: Varia
       return "";
     case "set":
       // For sets, default depends on setType
-      if (varDef?.setType === "identical") {
+      if (objDef?.setType === "identical") {
         return 0; // Count for identical sets
       } else {
         return []; // Empty array for elements sets
@@ -216,9 +216,9 @@ const getDefaultValueForType = (type: VariableDefinition["type"], varDef?: Varia
   }
 };
 
-export const validateVariableValue = (
+export const validateGameObjectValue = (
   value: any,
-  definition: VariableDefinition
+  definition: GameObjectDefinition
 ): { valid: boolean; error?: string } => {
   // Type validation
   switch (definition.type) {
@@ -251,7 +251,7 @@ export const validateVariableValue = (
       break;
     case "set":
       if (!definition.setType) {
-        return { valid: false, error: "Set variable must have a setType defined" };
+        return { valid: false, error: "Set object must have a setType defined" };
       }
       if (definition.setType === "identical") {
         // Identical sets should have a number value (count)
@@ -275,11 +275,11 @@ export const validateVariableValue = (
         // Validate each element in the array
         const setElementIds = definition.setElements || [];
         for (const elementValue of value as SetElementValue[]) {
-          if (!elementValue.elementVariableDefinitionId) {
-            return { valid: false, error: "Set element must have an elementVariableDefinitionId" };
+          if (!elementValue.elementObjectDefinitionId) {
+            return { valid: false, error: "Set element must have an elementObjectDefinitionId" };
           }
-          if (!setElementIds.includes(elementValue.elementVariableDefinitionId)) {
-            return { valid: false, error: `Set element ${elementValue.elementVariableDefinitionId} is not defined in set` };
+          if (!setElementIds.includes(elementValue.elementObjectDefinitionId)) {
+            return { valid: false, error: `Set element ${elementValue.elementObjectDefinitionId} is not defined in set` };
           }
           if (typeof elementValue.quantity !== "number" || isNaN(elementValue.quantity)) {
             return { valid: false, error: "Set element quantity must be a number" };
@@ -294,4 +294,3 @@ export const validateVariableValue = (
 
   return { valid: true };
 };
-

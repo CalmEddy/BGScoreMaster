@@ -812,13 +812,13 @@ textarea {
   color: #9ca3af;
 }
 
-.designer-variable-grid {
+.designer-object-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 12px;
 }
 
-.designer-variable-item {
+.designer-object-item {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -829,11 +829,11 @@ textarea {
   cursor: pointer;
 }
 
-.designer-variable-item input {
+.designer-object-item input {
   margin-top: 4px;
 }
 
-.designer-variable-tag {
+.designer-object-tag {
   display: inline-block;
   margin-left: 6px;
   font-size: 0.7rem;

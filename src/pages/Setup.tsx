@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { createId } from "../lib/id";
 import { AppAction, AppState, Player, Session } from "../state/types";
 import { applyTemplate, validateTemplateCompatibility } from "../lib/templateApplication";
@@ -94,8 +94,8 @@ const Setup = ({
           scoreDirection,
           allowNegative,
           showRoundControls: true,
-          showSessionVariables: true,
-          showPlayerVariables: true,
+          showSessionObjects: true,
+          showPlayerObjects: true,
           showQuickAdd: true,
         },
         playerIds: [],
@@ -180,7 +180,7 @@ const Setup = ({
                 </p>
               )}
               <div style={{ fontSize: "0.75rem", color: "#9ca3af", marginBottom: "12px" }}>
-                {template.categoryTemplates?.length || 0} categories • {template.ruleTemplates?.length || 0} rules • {template.variableDefinitions?.length || 0} variables
+                {template.categoryTemplates?.length || 0} categories • {template.ruleTemplates?.length || 0} rules • {template.objectDefinitions?.length || 0} objects
               </div>
               {onSelectTemplate && (
                 <button
@@ -279,4 +279,3 @@ const Setup = ({
 };
 
 export default Setup;
-
