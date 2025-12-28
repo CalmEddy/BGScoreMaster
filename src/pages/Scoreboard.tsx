@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import Modal from "../components/Modal";
 import PlayerCard from "../components/PlayerCard";
 import { createId } from "../lib/id";
-import { computePlayerTotal, findWinners, getSessionEntries } from "../lib/calculations";
+import { computePlayerTotal, findWinners, getSessionEntries, computeRoundScore } from "../lib/calculations";
 import { evaluateRules } from "../lib/ruleEngine";
 import { getSessionVariables } from "../lib/variableStorage";
 import { applyTemplateToExistingSession, validateTemplateCompatibility } from "../lib/templateApplication";
@@ -104,7 +104,7 @@ const Scoreboard = ({
   const totals = useMemo(() => {
     const result: Record<string, number> = {};
     players.forEach((player) => {
-      result[player.id] = computePlayerTotal(state, session.id, player.id);
+      result[player.id] = computePlayerTotal(state, session.id, player.id, selectedRoundId);
     });
     return result;
   }, [
@@ -113,7 +113,17 @@ const Scoreboard = ({
     state.entries,
     state.variableValues,
     state.categories,
+    selectedRoundId,
   ]);
+
+  const roundScores = useMemo(() => {
+    if (!selectedRoundId) return {};
+    const result: Record<string, number> = {};
+    players.forEach((player) => {
+      result[player.id] = computeRoundScore(state, session.id, player.id, selectedRoundId);
+    });
+    return result;
+  }, [state, session.id, players, selectedRoundId]);
 
   const winners = useMemo(
     () => findWinners(totals, session.settings.scoreDirection),
@@ -336,6 +346,7 @@ const Scoreboard = ({
               key={player.id}
               name={player.name}
               total={totals[player.id] ?? 0}
+              roundScore={roundScores[player.id]}
               isWinner={winners.includes(player.id)}
               allowNegative={session.settings.allowNegative}
               onQuickAdd={(value) => handleQuickAdd(player.id, value)}
@@ -346,6 +357,21 @@ const Scoreboard = ({
               state={state}
               showQuickAdd={displaySettings.showQuickAdd}
               showVariables={displaySettings.showPlayerVariables}
+              currentRoundId={selectedRoundId}
+              onCategoryButtonClick={(categoryId, value) => {
+                const entry: ScoreEntry = {
+                  id: createId(),
+                  sessionId: session.id,
+                  playerId: player.id,
+                  categoryId,
+                  roundId: selectedRoundId,
+                  value,
+                  createdAt: Date.now(),
+                  source: "manual",
+                  note: `Quick ${value > 0 ? 'add' : 'subtract'} via card button`,
+                };
+                dispatch({ type: "entry/add", payload: entry });
+              }}
               onVariableUpdate={(variableValueId, value) => {
                 const variable = state.variableValues?.[variableValueId];
                 if (variable) {

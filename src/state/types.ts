@@ -205,6 +205,35 @@ export type GameTemplate = {
     defaultView?: "scoreboard" | "categories" | "players";
     colorScheme?: Record<string, string>;
   };
+  playerCardConfig?: {
+    showPlayerName: boolean;
+    showRoundScore: boolean;
+    showTotalScore: boolean;
+    addSubtractSection: {
+      enabled: boolean;
+      collapsible: boolean;
+      defaultExpanded?: boolean;
+      buttons: Array<{
+        id: ID;
+        categoryId: ID;
+        label: string;
+        order: number;
+      }>;
+    };
+    variablesSection: {
+      enabled: boolean;
+      collapsible: boolean;
+      defaultExpanded?: boolean;
+      tableConfig: {
+        columns: Array<{
+          id: ID;
+          variableDefinitionId: ID;
+          label: string;
+          order: number;
+        }>;
+      };
+    };
+  };
 };
 
 export type AppState = {

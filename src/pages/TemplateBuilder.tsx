@@ -5,6 +5,7 @@ import CategoryBuilder from "../components/CategoryBuilder";
 import VariableBuilder from "../components/VariableBuilder";
 import RuleTemplateEditor from "../components/RuleTemplateEditor";
 import CategoryTemplateEditor from "../components/CategoryTemplateEditor";
+import PlayerCardDesigner from "../components/PlayerCardDesigner";
 
 const TemplateBuilder = ({
   state,
@@ -46,6 +47,9 @@ const TemplateBuilder = ({
   const [variableDefinitions, setVariableDefinitions] = useState<VariableDefinition[]>(
     existingTemplate?.variableDefinitions || []
   );
+  const [playerCardConfig, setPlayerCardConfig] = useState(
+    existingTemplate?.playerCardConfig
+  );
   const [editingRule, setEditingRule] = useState<RuleTemplate | null>(null);
   const [editingCategory, setEditingCategory] = useState<CategoryTemplate | null>(null);
 
@@ -55,6 +59,7 @@ const TemplateBuilder = ({
     "Categories",
     "Variables",
     "Rules",
+    "Player Card",
     "Preview",
   ];
 
@@ -86,6 +91,7 @@ const TemplateBuilder = ({
       ruleTemplates,
       variableDefinitions,
       mechanics: existingTemplate?.mechanics || [],
+      playerCardConfig,
     };
 
     if (existingTemplate) {
@@ -365,6 +371,21 @@ const TemplateBuilder = ({
 
           {step === 5 && (
             <div className="stack">
+              <h2>Player Card</h2>
+              <p style={{ fontSize: "0.875rem", color: "#6b7280" }}>
+                Configure the layout and functionality of player cards in sessions using this template.
+              </p>
+              <PlayerCardDesigner
+                config={playerCardConfig}
+                categories={categoryTemplates}
+                variables={variableDefinitions}
+                onChange={setPlayerCardConfig}
+              />
+            </div>
+          )}
+
+          {step === 6 && (
+            <div className="stack">
               <h2>Preview</h2>
               <div className="card stack">
                 <div className="inline" style={{ gap: "8px", marginBottom: "12px" }}>
@@ -381,6 +402,19 @@ const TemplateBuilder = ({
                   <p><strong>Categories:</strong> {categoryTemplates.length}</p>
                   <p><strong>Rules:</strong> {ruleTemplates.length}</p>
                   <p><strong>Variables:</strong> {variableDefinitions.length}</p>
+                  {playerCardConfig && (
+                    <>
+                      <p><strong>Player Card:</strong> Configured</p>
+                      <p style={{ fontSize: "0.875rem", marginLeft: "16px" }}>
+                        Add/Subtract: {playerCardConfig.addSubtractSection.enabled ? "Enabled" : "Disabled"} 
+                        ({playerCardConfig.addSubtractSection.buttons.length} buttons)
+                      </p>
+                      <p style={{ fontSize: "0.875rem", marginLeft: "16px" }}>
+                        Variables: {playerCardConfig.variablesSection.enabled ? "Enabled" : "Disabled"}
+                        ({playerCardConfig.variablesSection.tableConfig.columns.length} columns)
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

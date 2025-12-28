@@ -303,6 +303,19 @@ export const findWinners = (totals: Record<string, number>, direction: "higherWi
     .map(([playerId]) => playerId);
 };
 
+export const computeRoundScore = (
+  state: AppState,
+  sessionId: string,
+  playerId: string,
+  roundId: string
+): number => {
+  // Sum all entries for this player in this round
+  const roundEntries = Object.values(state.entries || {}).filter(
+    (e) => e.sessionId === sessionId && e.playerId === playerId && e.roundId === roundId
+  );
+  return roundEntries.reduce((sum, entry) => sum + entry.value, 0);
+};
+
 export const formatCategoryName = (
   categories: Record<string, Category>,
   categoryId: string | undefined
