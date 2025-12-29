@@ -4,6 +4,7 @@ import { getPlayerObjects } from "../lib/objectStorage";
 import ObjectRenderer from "./ObjectRenderer";
 
 const quickValues = [1, 5, 10, -1, -5, -10];
+const normalizeCategoryName = (value?: string) => value?.trim().toLowerCase();
 
 const PlayerCard = ({
   name,
@@ -124,9 +125,12 @@ const PlayerCard = ({
           <div className="player-card-action-grid">
             {actionButtons.map((button) => {
               const templateCategoryName = categoryNameMap[button.categoryId];
-              const matchedCategory = sessionCategories.find(
-                (category) => category.name === templateCategoryName
-              );
+              const templateCategoryKey = normalizeCategoryName(templateCategoryName);
+              const matchedCategory = sessionCategories.find((category) => {
+                if (category.id === button.categoryId) return true;
+                if (!templateCategoryKey) return false;
+                return normalizeCategoryName(category.name) === templateCategoryKey;
+              });
               const isDisabled = !matchedCategory || (!allowNegative && actionMode === "subtract");
               return (
                 <button
