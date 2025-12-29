@@ -62,6 +62,8 @@ const Scoreboard = ({
   const [entryCategoryId, setEntryCategoryId] = useState<string | undefined>(undefined);
   const [entryRoundId, setEntryRoundId] = useState<string | undefined>(selectedRoundId);
   const [entryNote, setEntryNote] = useState("");
+  const [renamingPlayerId, setRenamingPlayerId] = useState<string | null>(null);
+  const [renamingPlayerValue, setRenamingPlayerValue] = useState("");
   const displaySettings = {
     showRoundControls: session.settings.showRoundControls ?? true,
     showSessionObjects: session.settings.showSessionObjects ?? true,
@@ -176,40 +178,90 @@ const Scoreboard = ({
     return `${Object.keys(state.entries).length}:${sessionEntryIds}`;
   }, [state.entries, session.id]);
 
-  const totals = useMemo(() => {
+  const roundTotals = useMemo(() => {
     const result: Record<string, { manual: number; calculated: number; total: number }> = {};
-    // Debug: Log entry count to verify state.entries is updating
     const entryCount = state.entries ? Object.keys(state.entries).length : 0;
     const sessionEntryCount = getSessionEntries(state, session.id).length;
-    console.debug(`Computing totals: ${entryCount} total entries in state, ${sessionEntryCount} for this session`);
-    
+    console.debug(`Computing round totals: ${entryCount} total entries in state, ${sessionEntryCount} for this session`);
+
     players.forEach((player) => {
-      // Debug: Log entries for this player
       const playerEntries = getSessionEntries(state, session.id).filter(e => e.playerId === player.id);
       console.debug(`Player ${player.name} (${player.id}): ${playerEntries.length} entries`);
       if (playerEntries.length > 0) {
         const entryValues = playerEntries.map(e => `${e.categoryId || 'uncat'}:${e.value}`).join(", ");
         console.debug(`  Entry values: ${entryValues}`);
       }
-      
+
       const scoreBreakdown = computePlayerTotal(state, session.id, player.id, selectedRoundId);
       result[player.id] = scoreBreakdown;
-      console.debug(`Computed score for player ${player.name} (${player.id}): manual=${scoreBreakdown.manual}, calculated=${scoreBreakdown.calculated}, total=${scoreBreakdown.total}`);
+      console.debug(`Computed round score for player ${player.name} (${player.id}): manual=${scoreBreakdown.manual}, calculated=${scoreBreakdown.calculated}, total=${scoreBreakdown.total}`);
     });
     return result;
   }, [
     players,
     session.id,
-    session.templateId, // Include templateId so totals recalculate when template changes
-    entriesKey, // Use entriesKey to ensure recalculation when entries change
+    session.templateId,
+    entriesKey,
     state.objectValues,
-    state.templates, // Include templates so totals recalculate when template data changes
-    selectedRoundId, // Include selectedRoundId for calculated score computation
+    state.templates,
+    selectedRoundId,
+  ]);
+
+  const overallTotals = useMemo(() => {
+    const result: Record<string, { manual: number; calculated: number; total: number }> = {};
+
+    players.forEach((player) => {
+      if (session.settings.roundsEnabled && rounds.length > 0) {
+        const summed = rounds.reduce(
+          (acc, round) => {
+            const roundScore = computePlayerTotal(state, session.id, player.id, round.id);
+            acc.manual += roundScore.manual;
+            acc.calculated += roundScore.calculated;
+            acc.total += roundScore.total;
+            return acc;
+          },
+          { manual: 0, calculated: 0, total: 0 }
+        );
+        result[player.id] = summed;
+      } else {
+        result[player.id] = computePlayerTotal(state, session.id, player.id);
+      }
+    });
+
+    return result;
+  }, [
+    players,
+    rounds,
+    session.id,
+    session.settings.roundsEnabled,
+    session.templateId,
+    entriesKey,
+    state.objectValues,
+    state.templates,
+  ]);
+
+  const roundScoreMatrix = useMemo(() => {
+    const matrix: Record<string, Record<string, number>> = {};
+    rounds.forEach((round) => {
+      matrix[round.id] = {};
+      players.forEach((player) => {
+        matrix[round.id][player.id] = computePlayerTotal(state, session.id, player.id, round.id).total;
+      });
+    });
+    return matrix;
+  }, [
+    players,
+    rounds,
+    session.id,
+    session.templateId,
+    entriesKey,
+    state.objectValues,
+    state.templates,
   ]);
 
   const winners = useMemo(
-    () => findWinners(totals, session.settings.scoreDirection),
-    [totals, session.settings.scoreDirection]
+    () => findWinners(overallTotals, session.settings.scoreDirection),
+    [overallTotals, session.settings.scoreDirection]
   );
 
   const handleQuickAdd = (playerId: string, value: number) => {
@@ -655,6 +707,19 @@ const Scoreboard = ({
     setEntryPlayerId(null);
   };
 
+  const handleRenamePlayer = () => {
+    if (!renamingPlayerId) return;
+    const player = state.players[renamingPlayerId];
+    if (!player) return;
+    const nextName = renamingPlayerValue.trim();
+    if (!nextName) return;
+    dispatch({
+      type: "player/update",
+      payload: { ...player, name: nextName },
+    });
+    setRenamingPlayerId(null);
+  };
+
   // Note: Rules are now evaluated in the useEffect above (lines 66-138)
   // which only evaluates rules for the player who made the manual entry.
   // This old useEffect that evaluated for all players has been removed to prevent
@@ -723,6 +788,68 @@ const Scoreboard = ({
             </button>
           )}
         </div>
+
+        {session.settings.roundsEnabled && (
+          <div className="card round-scorecard">
+            <div className="round-scorecard-header">
+              <div>
+                <div className="card-title">Round Tracker</div>
+                <div className="round-scorecard-subtitle">
+                  Tap a round or score cell to jump between rounds.
+                </div>
+              </div>
+            </div>
+            <div className="round-scorecard-scroll">
+              <table className="round-scorecard-table">
+                <thead>
+                  <tr>
+                    <th>Round</th>
+                    {players.map((player) => (
+                      <th key={player.id}>
+                        <button
+                          className="round-scorecard-player"
+                          onClick={() => {
+                            setRenamingPlayerId(player.id);
+                            setRenamingPlayerValue(player.name);
+                          }}
+                        >
+                          {player.name}
+                        </button>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rounds.map((round) => {
+                    const isActive = round.id === selectedRoundId;
+                    return (
+                      <tr key={round.id} className={isActive ? "active" : ""}>
+                        <td>
+                          <button
+                            className="round-scorecard-round"
+                            onClick={() => setSelectedRoundId(round.id)}
+                          >
+                            {round.label}
+                          </button>
+                        </td>
+                        {players.map((player) => (
+                          <td key={player.id}>
+                            <button
+                              className="round-scorecard-cell"
+                              onClick={() => setSelectedRoundId(round.id)}
+                            >
+                              {roundScoreMatrix[round.id]?.[player.id] ?? 0}
+                            </button>
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
       <div className="container stack">
         {session.settings.roundsEnabled && displaySettings.showRoundControls && (
@@ -805,16 +932,17 @@ const Scoreboard = ({
               handleCategoryAction(player.id, categoryId, mode);
             };
             
-            const playerScore = totals[player.id] ?? { manual: 0, calculated: 0, total: 0 };
+            const playerScore = overallTotals[player.id] ?? { manual: 0, calculated: 0, total: 0 };
+            const roundScore = roundTotals[player.id] ?? { manual: 0, calculated: 0, total: 0 };
             console.debug(`Rendering PlayerCard: player=${player.name} (id=${player.id}), manual=${playerScore.manual}, calculated=${playerScore.calculated}, total=${playerScore.total}`);
             
             return (
             <PlayerCard
               key={player.id}
               name={player.name}
-              manualScore={playerScore.manual}
-              calculatedScore={playerScore.calculated}
               total={playerScore.total}
+              roundScore={roundScore.total}
+              roundLabel={rounds.find((round) => round.id === selectedRoundId)?.label}
               isWinner={winners.includes(player.id)}
               allowNegative={session.settings.allowNegative}
               onQuickAdd={(value) => handleQuickAdd(player.id, value)}
@@ -902,6 +1030,24 @@ const Scoreboard = ({
             </div>
             <button className="button" onClick={handleSaveEntry}>
               Save entry
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {renamingPlayerId && (
+        <Modal title="Edit Player Name" onClose={() => setRenamingPlayerId(null)}>
+          <div className="stack">
+            <div>
+              <label className="label">Name</label>
+              <input
+                className="input"
+                value={renamingPlayerValue}
+                onChange={(event) => setRenamingPlayerValue(event.target.value)}
+              />
+            </div>
+            <button className="button" onClick={handleRenamePlayer}>
+              Save name
             </button>
           </div>
         </Modal>

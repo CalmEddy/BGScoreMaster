@@ -9,9 +9,9 @@ const normalizeCategoryName = (value?: string) => value?.trim().toLowerCase();
 
 const PlayerCard = ({
   name,
-  manualScore,
-  calculatedScore,
   total,
+  roundScore,
+  roundLabel,
   isWinner,
   allowNegative,
   onQuickAdd,
@@ -26,9 +26,9 @@ const PlayerCard = ({
   onCategoryAction,
 }: {
   name: string;
-  manualScore: number;
-  calculatedScore: number;
   total: number;
+  roundScore?: number;
+  roundLabel?: string;
   isWinner: boolean;
   allowNegative: boolean;
   onQuickAdd: (value: number) => void;
@@ -106,13 +106,13 @@ const PlayerCard = ({
         <button className="button ghost" onClick={onOpenLedger}>
           {name}
         </button>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
           <span className={`score ${isWinner ? "winner" : ""}`}>{total}</span>
-          <div style={{ fontSize: "0.7rem", color: "#6b7280", display: "flex", gap: "6px" }}>
-            <span>Manual: {manualScore}</span>
-            <span>•</span>
-            <span>Calc: {calculatedScore}</span>
-          </div>
+          {roundLabel && roundScore !== undefined && (
+            <div className="score-round">
+              {roundLabel}: {roundScore}
+            </div>
+          )}
         </div>
       </div>
       {hasActionButtons && (

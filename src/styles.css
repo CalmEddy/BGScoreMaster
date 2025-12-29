@@ -178,6 +178,12 @@ textarea {
   color: #16a34a;
 }
 
+.score-round {
+  font-size: 0.75rem;
+  color: #6b7280;
+  font-weight: 600;
+}
+
 .quick-buttons {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -216,6 +222,95 @@ textarea {
   padding: 10px;
   font-weight: 700;
   cursor: pointer;
+}
+
+.round-scorecard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.round-scorecard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.round-scorecard-subtitle {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.round-scorecard-scroll {
+  overflow: auto;
+  max-height: 240px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+.round-scorecard-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 360px;
+}
+
+.round-scorecard-table th,
+.round-scorecard-table td {
+  padding: 10px 12px;
+  text-align: center;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.round-scorecard-table thead th {
+  position: sticky;
+  top: 0;
+  background: #f0f9ff;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #0369a1;
+  z-index: 1;
+}
+
+.round-scorecard-table tbody tr.active {
+  background: #fefce8;
+}
+
+.round-scorecard-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.round-scorecard-player,
+.round-scorecard-round,
+.round-scorecard-cell {
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.round-scorecard-player {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.round-scorecard-round {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.round-scorecard-cell {
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.round-scorecard-cell:hover,
+.round-scorecard-round:hover,
+.round-scorecard-player:hover {
+  color: #0284c7;
 }
 
 .modal-backdrop {
