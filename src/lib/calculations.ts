@@ -12,10 +12,16 @@ export const getSessionEntries = (state: AppState, sessionId: string): ScoreEntr
 export const computeManualScore = (
   state: AppState,
   sessionId: string,
-  playerId: string
+  playerId: string,
+  roundId?: string
 ): number => {
   return getSessionEntries(state, sessionId)
-    .filter((entry) => entry.playerId === playerId && entry.source === "manual")
+    .filter(
+      (entry) =>
+        entry.playerId === playerId &&
+        entry.source === "manual" &&
+        (roundId ? entry.roundId === roundId : true)
+    )
     .reduce((sum, entry) => sum + entry.value, 0);
 };
 
@@ -24,11 +30,17 @@ export const computeManualScore = (
 const computeBaseCategoryTotals = (
   state: AppState,
   sessionId: string,
-  playerId: string
+  playerId: string,
+  roundId?: string
 ): Record<string, number> => {
   const totals: Record<string, number> = {};
   getSessionEntries(state, sessionId)
-    .filter((entry) => entry.playerId === playerId && entry.source === "ruleEngine")
+    .filter(
+      (entry) =>
+        entry.playerId === playerId &&
+        entry.source === "ruleEngine" &&
+        (roundId ? entry.roundId === roundId : true)
+    )
     .forEach((entry) => {
       const key = entry.categoryId ?? "uncategorized";
       totals[key] = (totals[key] ?? 0) + entry.value;
@@ -347,7 +359,7 @@ export const computeCategoryTotals = (
   // The score entries from object impacts will be included in the next evaluation cycle
 
   // Step 1: Compute base totals from entries (including any score entries from object impacts)
-  let totals = computeBaseCategoryTotals(state, sessionId, playerId);
+  let totals = computeBaseCategoryTotals(state, sessionId, playerId, currentRoundId);
   if (totals["5xujgrn0wr"] !== undefined && playerId === "xk9glf03et") {
     console.debug(`computeCategoryTotals (after base): category 5xujgrn0wr = ${totals["5xujgrn0wr"]}`);
   }
@@ -394,7 +406,7 @@ export const computePlayerTotal = (
   playerId: string,
   currentRoundId?: string
 ): { manual: number; calculated: number; total: number } => {
-  const manual = computeManualScore(state, sessionId, playerId);
+  const manual = computeManualScore(state, sessionId, playerId, currentRoundId);
   const calculated = computeCalculatedScore(state, sessionId, playerId, currentRoundId);
   return {
     manual,
