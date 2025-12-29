@@ -21,7 +21,7 @@ function evaluateCondition(
 
   switch (condition.type) {
     case "total":
-      leftValue = computePlayerTotal(state, sessionId, playerId, currentRoundId);
+      leftValue = computePlayerTotal(state, sessionId, playerId, currentRoundId).total;
       break;
     case "category":
       if (!condition.categoryId) return false;
@@ -101,7 +101,7 @@ function applyRuleAction(
   const { playerId, sessionId, state, currentRoundId } = context;
 
   const categoryTotals = computeCategoryTotals(state, sessionId, playerId, currentRoundId);
-  const currentTotal = computePlayerTotal(state, sessionId, playerId, currentRoundId);
+  const currentTotal = computePlayerTotal(state, sessionId, playerId, currentRoundId).total;
   const targetCategoryTotal = rule.action.targetCategoryId
     ? categoryTotals[rule.action.targetCategoryId] ?? 0
     : currentTotal;

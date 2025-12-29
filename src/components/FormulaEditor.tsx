@@ -28,10 +28,12 @@ const FormulaEditor = ({
   useEffect(() => {
     const result = validateFormula(value);
     setValidation(result);
-    if (result.valid) {
+    if (result.valid && value !== formula) {
+      // Only call onChange if the value actually changed from the prop
+      // This prevents infinite loops when onChange is not memoized
       onChange(value);
     }
-  }, [value, onChange]);
+  }, [value]); // Removed onChange from dependencies to prevent infinite loops
 
   const availableCategories = Object.values(categories).filter(
     (cat) => cat.id !== categoryId

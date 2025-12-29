@@ -8,7 +8,19 @@ import { getSessionTemplateCategories } from "./templateApplication";
 export const getSessionEntries = (state: AppState, sessionId: string): ScoreEntry[] =>
   Object.values(state.entries || {}).filter((entry) => entry.sessionId === sessionId);
 
+// Compute manual score (sum of entries with source: "manual")
+export const computeManualScore = (
+  state: AppState,
+  sessionId: string,
+  playerId: string
+): number => {
+  return getSessionEntries(state, sessionId)
+    .filter((entry) => entry.playerId === playerId && entry.source === "manual")
+    .reduce((sum, entry) => sum + entry.value, 0);
+};
+
 // Compute base category totals from entries (before formulas/weights)
+// Only includes entries with source: "ruleEngine" for calculated scores
 const computeBaseCategoryTotals = (
   state: AppState,
   sessionId: string,
@@ -16,7 +28,7 @@ const computeBaseCategoryTotals = (
 ): Record<string, number> => {
   const totals: Record<string, number> = {};
   getSessionEntries(state, sessionId)
-    .filter((entry) => entry.playerId === playerId)
+    .filter((entry) => entry.playerId === playerId && entry.source === "ruleEngine")
     .forEach((entry) => {
       const key = entry.categoryId ?? "uncategorized";
       totals[key] = (totals[key] ?? 0) + entry.value;
@@ -120,6 +132,17 @@ const applyFormulas = (
       // No entries for this category - don't apply formula, keep it at 0
       return;
     }
+    
+    // IMPORTANT: If the category has entries, use the sum of entries, NOT the formula
+    // The formula is only used when creating entries (button behavior), not for calculating totals
+    // This prevents formulas from overwriting entry values
+    const baseTotal = categoryTotals[category.id] ?? 0;
+    if (baseTotal > 0) {
+      // Category has entries - use the sum of entries, skip formula evaluation
+      console.log(`[applyFormulas] Category "${category.name}" has entries (baseTotal=${baseTotal}), using entry sum instead of formula`);
+      result[category.id] = baseTotal;
+      return;
+    }
 
     try {
       // First, try to parse as a simple number (handles cases like "+3", "-5", "10")
@@ -132,12 +155,15 @@ const applyFormulas = (
         // (which is already in result[category.id] from base totals)
         // Only use the formula value if there are no entries
         const baseTotal = categoryTotals[category.id] ?? 0;
+        console.log(`[applyFormulas] Category "${category.name}" (${category.id}): baseTotal=${baseTotal}, formula="${trimmedFormula}", numericValue=${numericValue}`);
         if (baseTotal > 0) {
           // There are entries - use the sum of entries, not the formula value
           // The formula is used when creating entries (button behavior), not for totals
+          console.log(`[applyFormulas] Category "${category.name}" has entries, using baseTotal: ${baseTotal}`);
           result[category.id] = baseTotal;
         } else {
           // No entries - use the formula value
+          console.log(`[applyFormulas] Category "${category.name}" has no entries, using formula value: ${numericValue}`);
           result[category.id] = numericValue;
         }
         if (category.id === "5xujgrn0wr") {
@@ -327,10 +353,12 @@ export const computeCategoryTotals = (
   }
 
   // Step 2: Compute nested category totals (parents from children)
-  totals = computeNestedCategoryTotals(state, sessionId, totals);
-  if (totals["5xujgrn0wr"] !== undefined && playerId === "xk9glf03et") {
-    console.debug(`computeCategoryTotals (after nested): category 5xujgrn0wr = ${totals["5xujgrn0wr"]}`);
-  }
+  // DISABLED: Parent categories should only have entries when their button is clicked,
+  // not automatically from children. Each category button should work independently.
+  // totals = computeNestedCategoryTotals(state, sessionId, totals);
+  // if (totals["5xujgrn0wr"] !== undefined && playerId === "xk9glf03et") {
+  //   console.debug(`computeCategoryTotals (after nested): category 5xujgrn0wr = ${totals["5xujgrn0wr"]}`);
+  // }
 
   // Step 3: Apply formulas (with enhanced object support)
   totals = applyFormulas(state, sessionId, totals, playerId, currentRoundId);
@@ -347,17 +375,50 @@ export const computeCategoryTotals = (
   return totals;
 };
 
-export const computePlayerTotal = (state: AppState, sessionId: string, playerId: string, currentRoundId?: string): number => {
+// Compute calculated score (sum of category totals from formulas, weights, rule entries, object impacts)
+// Since parent categories no longer automatically sum their children, we can sum all category totals
+export const computeCalculatedScore = (
+  state: AppState,
+  sessionId: string,
+  playerId: string,
+  currentRoundId?: string
+): number => {
   const categoryTotals = computeCategoryTotals(state, sessionId, playerId, currentRoundId);
   return Object.values(categoryTotals).reduce((sum, total) => sum + total, 0);
 };
 
-export const findWinners = (totals: Record<string, number>, direction: "higherWins" | "lowerWins") => {
+// Compute player total with separate manual and calculated scores
+export const computePlayerTotal = (
+  state: AppState,
+  sessionId: string,
+  playerId: string,
+  currentRoundId?: string
+): { manual: number; calculated: number; total: number } => {
+  const manual = computeManualScore(state, sessionId, playerId);
+  const calculated = computeCalculatedScore(state, sessionId, playerId, currentRoundId);
+  return {
+    manual,
+    calculated,
+    total: manual + calculated,
+  };
+};
+
+export const findWinners = (
+  totals: Record<string, { manual: number; calculated: number; total: number }> | Record<string, number>,
+  direction: "higherWins" | "lowerWins"
+) => {
   const values = Object.values(totals);
   if (!values.length) return [] as string[];
-  const target = direction === "higherWins" ? Math.max(...values) : Math.min(...values);
+  
+  // Handle both old format (Record<string, number>) and new format (Record<string, { manual, calculated, total }>)
+  const getTotal = (value: number | { manual: number; calculated: number; total: number }): number => {
+    return typeof value === "number" ? value : value.total;
+  };
+  
+  const totalValues = values.map(getTotal);
+  const target = direction === "higherWins" ? Math.max(...totalValues) : Math.min(...totalValues);
   return Object.entries(totals)
-    .filter(([, value]) => value === target)
+    .filter(([, value]) => getTotal(value) === target)
     .map(([playerId]) => playerId);
 };
 

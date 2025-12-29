@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import Modal from "../components/Modal";
 import PlayerCard from "../components/PlayerCard";
 import { createId } from "../lib/id";
-import { computePlayerTotal, findWinners, getSessionEntries } from "../lib/calculations";
+import { computePlayerTotal, findWinners, getSessionEntries, computeCategoryTotals } from "../lib/calculations";
 import { getObjectValue } from "../lib/objectStorage";
+import { getGameObjectState } from "../lib/objectCalculator";
 import { evaluateRules } from "../lib/ruleEngine";
 import { getSessionObjects } from "../lib/objectStorage";
 import { applyTemplateToExistingSession, validateTemplateCompatibility, getSessionTemplateCategories } from "../lib/templateApplication";
-import { evaluateFormula } from "../lib/formulaParser";
+import { evaluateFormula, ExtendedFormulaContext } from "../lib/formulaParser";
 import {
   AppAction,
   AppState,
@@ -176,7 +177,7 @@ const Scoreboard = ({
   }, [state.entries, session.id]);
 
   const totals = useMemo(() => {
-    const result: Record<string, number> = {};
+    const result: Record<string, { manual: number; calculated: number; total: number }> = {};
     // Debug: Log entry count to verify state.entries is updating
     const entryCount = state.entries ? Object.keys(state.entries).length : 0;
     const sessionEntryCount = getSessionEntries(state, session.id).length;
@@ -191,9 +192,9 @@ const Scoreboard = ({
         console.debug(`  Entry values: ${entryValues}`);
       }
       
-      const total = computePlayerTotal(state, session.id, player.id);
-      result[player.id] = total;
-      console.debug(`Computed total for player ${player.name} (${player.id}): ${total}`);
+      const scoreBreakdown = computePlayerTotal(state, session.id, player.id, selectedRoundId);
+      result[player.id] = scoreBreakdown;
+      console.debug(`Computed score for player ${player.name} (${player.id}): manual=${scoreBreakdown.manual}, calculated=${scoreBreakdown.calculated}, total=${scoreBreakdown.total}`);
     });
     return result;
   }, [
@@ -203,6 +204,7 @@ const Scoreboard = ({
     entriesKey, // Use entriesKey to ensure recalculation when entries change
     state.objectValues,
     state.templates, // Include templates so totals recalculate when template data changes
+    selectedRoundId, // Include selectedRoundId for calculated score computation
   ]);
 
   const winners = useMemo(
@@ -232,9 +234,22 @@ const Scoreboard = ({
     setEntryNote("");
   };
 
+  // Track recent category actions to prevent double-clicks
+  const recentCategoryActions = useRef<Map<string, number>>(new Map());
+  
   const handleCategoryAction = (playerId: string, categoryId: string, mode: "add" | "subtract") => {
     // Debug: Log the playerId being used
-    console.debug(`handleCategoryAction called: playerId=${playerId}, categoryId=${categoryId}, mode=${mode}`);
+    console.log(`[CategoryAction] handleCategoryAction called: playerId=${playerId}, categoryId=${categoryId}, mode=${mode}`);
+    
+    // Prevent double-clicks within 500ms
+    const actionKey = `${playerId}-${categoryId}-${mode}`;
+    const lastActionTime = recentCategoryActions.current.get(actionKey) || 0;
+    const timeSinceLastAction = Date.now() - lastActionTime;
+    if (timeSinceLastAction < 500) {
+      console.log(`[CategoryAction] Ignoring duplicate action (${timeSinceLastAction}ms since last)`);
+      return;
+    }
+    recentCategoryActions.current.set(actionKey, Date.now());
     
     // Always get fresh template from state - don't use cached template
     const currentTemplate = session.templateId ? state.templates[session.templateId] : undefined;
@@ -248,11 +263,14 @@ const Scoreboard = ({
       return;
     }
     
+    console.log(`[CategoryAction] Category found: name="${category.name}", displayType="${category.displayType}", defaultFormula="${category.defaultFormula || '(none)'}"`);
+    
     let value = 1; // Default value
     
     // If category has a formula, evaluate it as a simple expression
     // For formulas like "3+3", "+3", "5", etc., this will evaluate correctly
     if (category.defaultFormula) {
+      console.log(`[CategoryAction] Category has formula, evaluating: "${category.defaultFormula}"`);
       try {
         // First, try to parse as a simple number (handles cases like "+3", "-5", "10")
         const trimmedFormula = category.defaultFormula.trim();
@@ -261,21 +279,15 @@ const Scoreboard = ({
           value = numericValue;
         } else {
           // If not a simple number, try to evaluate as a formula
-          // Get base category totals (sum of entries only, without formulas) to avoid circular references
-          // This ensures category references like {Test} resolve to actual entry values
-          const baseTotals: Record<string, number> = {};
-          getSessionEntries(state, session.id)
-            .filter((entry) => entry.playerId === playerId)
-            .forEach((entry) => {
-              const key = entry.categoryId ?? "uncategorized";
-              baseTotals[key] = (baseTotals[key] ?? 0) + entry.value;
-            });
+          // Use calculated category totals (after formulas and weights) to properly evaluate formulas
+          // that reference other categories
+          const calculatedCategoryTotals = computeCategoryTotals(state, session.id, playerId, selectedRoundId);
           
           // Build getCategoryValue function to resolve category references
           const getCategoryValue = (categoryNameOrId: string): number => {
             // Handle special objects
             if (categoryNameOrId === "total") {
-              return Object.values(baseTotals).reduce((sum, val) => sum + val, 0);
+              return Object.values(calculatedCategoryTotals).reduce((sum, val) => sum + val, 0);
             }
             // Try to find category by name first, then by ID in template
             // Always use fresh template from state
@@ -285,12 +297,11 @@ const Scoreboard = ({
               (cat) => cat.name.toLowerCase() === categoryNameOrId.toLowerCase() || cat.id === categoryNameOrId
             );
             if (foundCategory) {
-              // Return base total (entries only) for the referenced category
-              // categoryId in entries is now a template category ID
-              return baseTotals[foundCategory.id] ?? 0;
+              // Return calculated total for the referenced category
+              return calculatedCategoryTotals[foundCategory.id] ?? 0;
             }
             // If not found, try direct lookup (categoryId in entries is template category ID)
-            return baseTotals[categoryNameOrId] ?? 0;
+            return calculatedCategoryTotals[categoryNameOrId] ?? 0;
           };
           
           // Build resolveObject function for game object references
@@ -349,25 +360,254 @@ const Scoreboard = ({
           // Get round index for context
           const roundIndex = selectedRoundId ? (state.rounds[selectedRoundId]?.index || 0) : 0;
           
+          // Build extended context for formula evaluation (matching applyFormulas in calculations.ts)
+          const getRoundIndex = (): number => roundIndex;
+          const extendedContext: ExtendedFormulaContext = {
+            categories: calculatedCategoryTotals,
+            total: Object.values(calculatedCategoryTotals).reduce((sum, val) => sum + val, 0),
+            round: roundIndex,
+            getObjectState: (objectName: string) => {
+              if (currentTemplate) {
+                const varDef = currentTemplate.objectDefinitions.find(
+                  (v) => v.name.toLowerCase() === objectName.toLowerCase() || v.id === objectName
+                );
+                if (varDef) {
+                  return getGameObjectState(state, session.id, varDef.id, playerId);
+                }
+              }
+              return "inactive";
+            },
+            ownsObject: (objectName: string, checkPlayerId?: string) => {
+              if (currentTemplate) {
+                const varDef = currentTemplate.objectDefinitions.find(
+                  (v) => v.name.toLowerCase() === objectName.toLowerCase() || v.id === objectName
+                );
+                if (varDef) {
+                  const targetPlayerId = checkPlayerId || playerId;
+                  const varState = getGameObjectState(state, session.id, varDef.id, targetPlayerId);
+                  return varState === "owned" || varState === "active";
+                }
+              }
+              return false;
+            },
+            getRoundIndex: getRoundIndex,
+            getPhaseId: () => undefined, // Phase support is future
+          };
+          
+          console.log(`[CategoryAction] Evaluating formula for category "${category.name}": "${category.defaultFormula}"`);
+          console.log(`[CategoryAction] Calculated category totals:`, calculatedCategoryTotals);
+          
           value = evaluateFormula(
             category.defaultFormula,
             {
-              categories: baseTotals,
-              total: Object.values(baseTotals).reduce((sum, val) => sum + val, 0),
+              categories: calculatedCategoryTotals,
+              total: Object.values(calculatedCategoryTotals).reduce((sum, val) => sum + val, 0),
               round: roundIndex,
             },
             getCategoryValue,
-            resolveObject
+            resolveObject,
+            extendedContext
           );
+          
+          console.log(`[CategoryAction] Formula evaluation result: ${value}`);
         }
       } catch (error) {
         console.error(`Failed to evaluate formula for category ${category.name} (formula: "${category.defaultFormula}"):`, error);
+        console.error(`Error details:`, error);
         value = 1; // Fallback to default
+      }
+    } else {
+      // If category has no formula, check if it has sub-categories
+      // If it does, we can calculate the value based on the sum of children's calculated totals
+      const subCategories = currentTemplate.categoryTemplates.filter(
+        (cat) => cat.parentId === category.id
+      );
+      
+      if (subCategories.length > 0) {
+        console.log(`[CategoryAction] Category has ${subCategories.length} sub-categories, calculating from children`);
+        // Get calculated category totals to see what the children would sum to
+        const calculatedCategoryTotals = computeCategoryTotals(state, session.id, playerId, selectedRoundId);
+        
+        // Sum the calculated totals of all sub-categories
+        let sumOfChildren = 0;
+        subCategories.forEach((subCat) => {
+          const subTotal = calculatedCategoryTotals[subCat.id] ?? 0;
+          console.log(`[CategoryAction] Sub-category "${subCat.name}" calculated total: ${subTotal}`);
+          sumOfChildren += subTotal;
+        });
+        
+        console.log(`[CategoryAction] Sum of sub-categories: ${sumOfChildren}`);
+        
+        // If sub-categories have formulas, evaluate each one and sum them
+        // This gives us the total value the button should add
+        const roundIndex = selectedRoundId ? (state.rounds[selectedRoundId]?.index || 0) : 0;
+        const getCategoryValue = (categoryNameOrId: string): number => {
+          if (categoryNameOrId === "total") {
+            return Object.values(calculatedCategoryTotals).reduce((sum, val) => sum + val, 0);
+          }
+          const foundCategory = currentTemplate.categoryTemplates.find(
+            (cat) => cat.name.toLowerCase() === categoryNameOrId.toLowerCase() || cat.id === categoryNameOrId
+          );
+          if (foundCategory) {
+            return calculatedCategoryTotals[foundCategory.id] ?? 0;
+          }
+          return calculatedCategoryTotals[categoryNameOrId] ?? 0;
+        };
+        
+        const resolveObject = (objectName: string): number | undefined => {
+          console.log(`[CategoryAction] resolveObject called with: "${objectName}"`);
+          if (currentTemplate) {
+            console.log(`[CategoryAction] Looking for object in ${currentTemplate.objectDefinitions.length} object definitions`);
+            const varDef = currentTemplate.objectDefinitions.find(
+              (v) => v.name.toLowerCase() === objectName.toLowerCase() || v.id === objectName
+            );
+            if (varDef) {
+              console.log(`[CategoryAction] Found object definition: "${varDef.name}" (id: ${varDef.id}, type: ${varDef.type}), defaultValue: ${varDef.defaultValue}`);
+              const playerVar = getObjectValue(state, session.id, varDef.id, playerId);
+              console.log(`[CategoryAction] Player object value:`, playerVar);
+              if (playerVar !== undefined) {
+                if (varDef.type === "set") {
+                  if (varDef.setType === "identical") {
+                    const result = typeof playerVar === "number" ? playerVar : 0;
+                    console.log(`[CategoryAction] Returning set (identical) value: ${result}`);
+                    return result;
+                  } else if (varDef.setType === "elements") {
+                    if (Array.isArray(playerVar)) {
+                      const result = (playerVar as any[]).reduce((sum, el) => sum + (el.quantity || 0), 0);
+                      console.log(`[CategoryAction] Returning set (elements) value: ${result}`);
+                      return result;
+                    }
+                    console.log(`[CategoryAction] Set (elements) is not an array, returning 0`);
+                    return 0;
+                  }
+                }
+                if (typeof playerVar === "number") {
+                  console.log(`[CategoryAction] Returning player object value: ${playerVar}`);
+                  return playerVar;
+                }
+              }
+              const sessionVar = getObjectValue(state, session.id, varDef.id);
+              console.log(`[CategoryAction] Session object value:`, sessionVar);
+              if (sessionVar !== undefined) {
+                if (varDef.type === "set") {
+                  if (varDef.setType === "identical") {
+                    const result = typeof sessionVar === "number" ? sessionVar : 0;
+                    console.log(`[CategoryAction] Returning session set (identical) value: ${result}`);
+                    return result;
+                  } else if (varDef.setType === "elements") {
+                    if (Array.isArray(sessionVar)) {
+                      const result = (sessionVar as any[]).reduce((sum, el) => sum + (el.quantity || 0), 0);
+                      console.log(`[CategoryAction] Returning session set (elements) value: ${result}`);
+                      return result;
+                    }
+                    console.log(`[CategoryAction] Session set (elements) is not an array, returning 0`);
+                    return 0;
+                  }
+                }
+                if (typeof sessionVar === "number") {
+                  console.log(`[CategoryAction] Returning session object value: ${sessionVar}`);
+                  return sessionVar;
+                }
+              }
+              // If value is undefined, use default value if available
+              if (varDef.defaultValue !== undefined) {
+                const defaultValue = typeof varDef.defaultValue === "number" ? varDef.defaultValue : 0;
+                console.log(`[CategoryAction] Object value is undefined, using default value: ${defaultValue}`);
+                return defaultValue;
+              }
+              console.log(`[CategoryAction] Object found but value is undefined and no default value`);
+            } else {
+              console.log(`[CategoryAction] Object "${objectName}" not found in template. Available objects:`, 
+                currentTemplate.objectDefinitions.map(v => v.name));
+            }
+          } else {
+            console.log(`[CategoryAction] No template available`);
+          }
+          console.log(`[CategoryAction] resolveObject returning undefined`);
+          return undefined;
+        };
+        
+        const getRoundIndex = (): number => roundIndex;
+        const extendedContext: ExtendedFormulaContext = {
+          categories: calculatedCategoryTotals,
+          total: Object.values(calculatedCategoryTotals).reduce((sum, val) => sum + val, 0),
+          round: roundIndex,
+          getObjectState: (objectName: string) => {
+            if (currentTemplate) {
+              const varDef = currentTemplate.objectDefinitions.find(
+                (v) => v.name.toLowerCase() === objectName.toLowerCase() || v.id === objectName
+              );
+              if (varDef) {
+                return getGameObjectState(state, session.id, varDef.id, playerId);
+              }
+            }
+            return "inactive";
+          },
+          ownsObject: (objectName: string, checkPlayerId?: string) => {
+            if (currentTemplate) {
+              const varDef = currentTemplate.objectDefinitions.find(
+                (v) => v.name.toLowerCase() === objectName.toLowerCase() || v.id === objectName
+              );
+              if (varDef) {
+                const targetPlayerId = checkPlayerId || playerId;
+                const varState = getGameObjectState(state, session.id, varDef.id, targetPlayerId);
+                return varState === "owned" || varState === "active";
+              }
+            }
+            return false;
+          },
+          getRoundIndex: getRoundIndex,
+          getPhaseId: () => undefined,
+        };
+        
+        // Evaluate each sub-category's formula and sum them
+        let totalFromSubCategories = 0;
+        subCategories.forEach((subCat) => {
+          if (subCat.defaultFormula) {
+            try {
+              console.log(`[CategoryAction] Evaluating sub-category "${subCat.name}" formula: "${subCat.defaultFormula}"`);
+              const subValue = evaluateFormula(
+                subCat.defaultFormula,
+                {
+                  categories: calculatedCategoryTotals,
+                  total: Object.values(calculatedCategoryTotals).reduce((sum, val) => sum + val, 0),
+                  round: roundIndex,
+                },
+                getCategoryValue,
+                resolveObject,
+                extendedContext
+              );
+              console.log(`[CategoryAction] Sub-category "${subCat.name}" formula result: ${subValue}`);
+              totalFromSubCategories += subValue;
+            } catch (error) {
+              console.error(`[CategoryAction] Failed to evaluate sub-category "${subCat.name}" formula:`, error);
+            }
+          } else {
+            console.log(`[CategoryAction] Sub-category "${subCat.name}" has no formula, using its calculated total: ${calculatedCategoryTotals[subCat.id] ?? 0}`);
+            totalFromSubCategories += calculatedCategoryTotals[subCat.id] ?? 0;
+          }
+        });
+        
+        console.log(`[CategoryAction] Total from all sub-category formulas: ${totalFromSubCategories}`);
+        value = totalFromSubCategories;
+        
+        // If total is 0 (no formulas or all evaluated to 0), fall back to default
+        if (totalFromSubCategories === 0) {
+          console.log(`[CategoryAction] Total from sub-categories is 0, using default value: 1`);
+          value = 1;
+        }
+      } else {
+        console.log(`[CategoryAction] Category does not have a formula and no sub-categories, using default value: ${value}`);
+        // The category should have a formula set if it needs to calculate a value
       }
     }
     
+    console.log(`[CategoryAction] Final calculated value before mode: ${value}`);
+    
     // Apply mode (add or subtract)
     const finalValue = mode === "subtract" ? -value : value;
+    
+    console.log(`[CategoryAction] Final value after mode (${mode}): ${finalValue}`);
     
     // Check if negative values are allowed
     if (finalValue < 0 && !session.settings.allowNegative) {
@@ -375,6 +615,7 @@ const Scoreboard = ({
     }
     
     // Create entry directly without opening modal
+    // Category button entries should contribute to calculated score, not manual score
     const entry: ScoreEntry = {
       id: createId(),
       sessionId: session.id,
@@ -383,10 +624,11 @@ const Scoreboard = ({
       value: finalValue,
       roundId: session.settings.roundsEnabled ? selectedRoundId : undefined,
       categoryId,
-      source: "manual",
+      source: "ruleEngine",
     };
-    console.debug(`Creating entry: playerId=${entry.playerId}, value=${entry.value}, categoryId=${entry.categoryId}, entryId=${entry.id}`);
+    console.log(`[CategoryAction] Creating entry: playerId=${entry.playerId}, value=${entry.value}, categoryId=${entry.categoryId}, entryId=${entry.id}, source=${entry.source}`);
     dispatch({ type: "entry/add", payload: entry });
+    console.log(`[CategoryAction] Entry dispatched, entryId=${entry.id}`);
     
     // Evaluate rules only for the player who made this action (not all players)
     // Use a ref to track if we're already evaluating rules to prevent infinite loops
@@ -563,14 +805,16 @@ const Scoreboard = ({
               handleCategoryAction(player.id, categoryId, mode);
             };
             
-            const playerTotal = totals[player.id] ?? 0;
-            console.debug(`Rendering PlayerCard: player=${player.name} (id=${player.id}), total=${playerTotal}`);
+            const playerScore = totals[player.id] ?? { manual: 0, calculated: 0, total: 0 };
+            console.debug(`Rendering PlayerCard: player=${player.name} (id=${player.id}), manual=${playerScore.manual}, calculated=${playerScore.calculated}, total=${playerScore.total}`);
             
             return (
             <PlayerCard
               key={player.id}
               name={player.name}
-              total={playerTotal}
+              manualScore={playerScore.manual}
+              calculatedScore={playerScore.calculated}
+              total={playerScore.total}
               isWinner={winners.includes(player.id)}
               allowNegative={session.settings.allowNegative}
               onQuickAdd={(value) => handleQuickAdd(player.id, value)}

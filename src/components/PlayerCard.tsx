@@ -9,6 +9,8 @@ const normalizeCategoryName = (value?: string) => value?.trim().toLowerCase();
 
 const PlayerCard = ({
   name,
+  manualScore,
+  calculatedScore,
   total,
   isWinner,
   allowNegative,
@@ -24,6 +26,8 @@ const PlayerCard = ({
   onCategoryAction,
 }: {
   name: string;
+  manualScore: number;
+  calculatedScore: number;
   total: number;
   isWinner: boolean;
   allowNegative: boolean;
@@ -102,7 +106,14 @@ const PlayerCard = ({
         <button className="button ghost" onClick={onOpenLedger}>
           {name}
         </button>
-        <span className={`score ${isWinner ? "winner" : ""}`}>{total}</span>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px" }}>
+          <span className={`score ${isWinner ? "winner" : ""}`}>{total}</span>
+          <div style={{ fontSize: "0.7rem", color: "#6b7280", display: "flex", gap: "6px" }}>
+            <span>Manual: {manualScore}</span>
+            <span>•</span>
+            <span>Calc: {calculatedScore}</span>
+          </div>
+        </div>
       </div>
       {hasActionButtons && (
         <div className="player-card-actions">
