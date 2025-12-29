@@ -102,6 +102,15 @@ const applyFormulas = (
     if (!category.formula) return;
 
     try {
+      // First, try to parse as a simple number (handles cases like "+3", "-5", "10")
+      const numericValue = Number(category.formula.trim());
+      if (!isNaN(numericValue) && isFinite(numericValue)) {
+        // Simple numeric formula - just use the number
+        result[category.id] = numericValue;
+        return;
+      }
+      
+      // If not a simple number, evaluate as a full formula expression
       const getCategoryValue = (categoryNameOrId: string): number => {
         // Handle special objects
         if (categoryNameOrId === "total") {

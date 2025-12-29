@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import Modal from "../components/Modal";
 import PlayerCard from "../components/PlayerCard";
 import { createId } from "../lib/id";
-import { computePlayerTotal, findWinners, getSessionEntries } from "../lib/calculations";
+import { computeCategoryTotals, computePlayerTotal, findWinners, getSessionEntries } from "../lib/calculations";
+import { getObjectValue } from "../lib/objectStorage";
 import { evaluateRules } from "../lib/ruleEngine";
 import { getSessionObjects } from "../lib/objectStorage";
 import { applyTemplateToExistingSession, validateTemplateCompatibility } from "../lib/templateApplication";
+import { evaluateFormula } from "../lib/formulaParser";
 import {
   AppAction,
   AppState,
@@ -143,11 +145,146 @@ const Scoreboard = ({
   };
 
   const handleCategoryAction = (playerId: string, categoryId: string, mode: "add" | "subtract") => {
-    setEntryPlayerId(playerId);
-    setEntryValue(mode === "add" ? "1" : "-1");
-    setEntryCategoryId(categoryId);
-    setEntryRoundId(selectedRoundId);
-    setEntryNote("");
+    const category = state.categories[categoryId];
+    if (!category) {
+      console.warn(`Category ${categoryId} not found`);
+      return;
+    }
+    
+    let value = 1; // Default value
+    
+    // If category has a formula, evaluate it as a simple expression
+    // For formulas like "3+3", "+3", "5", etc., this will evaluate correctly
+    if (category.formula) {
+      try {
+        // First, try to parse as a simple number (handles cases like "+3", "-5", "10")
+        const trimmedFormula = category.formula.trim();
+        const numericValue = Number(trimmedFormula);
+        if (!isNaN(numericValue) && isFinite(numericValue)) {
+          value = numericValue;
+        } else {
+          // If not a simple number, try to evaluate as a formula
+          // Get base category totals (sum of entries only, without formulas) to avoid circular references
+          // This ensures category references like {Test} resolve to actual entry values
+          const baseTotals: Record<string, number> = {};
+          getSessionEntries(state, session.id)
+            .filter((entry) => entry.playerId === playerId)
+            .forEach((entry) => {
+              const key = entry.categoryId ?? "uncategorized";
+              baseTotals[key] = (baseTotals[key] ?? 0) + entry.value;
+            });
+          
+          // Build getCategoryValue function to resolve category references
+          const getCategoryValue = (categoryNameOrId: string): number => {
+            // Handle special objects
+            if (categoryNameOrId === "total") {
+              return Object.values(baseTotals).reduce((sum, val) => sum + val, 0);
+            }
+            // Try to find category by name first, then by ID
+            const categories = Object.values(state.categories).filter((c) => c.sessionId === session.id);
+            const foundCategory = categories.find(
+              (cat) => cat.name.toLowerCase() === categoryNameOrId.toLowerCase() || cat.id === categoryNameOrId
+            );
+            if (foundCategory) {
+              // Return base total (entries only) for the referenced category
+              return baseTotals[foundCategory.id] ?? 0;
+            }
+            // If not found, try direct lookup (for backward compatibility with old formulas using IDs)
+            return baseTotals[categoryNameOrId] ?? 0;
+          };
+          
+          // Build resolveObject function for game object references
+          const template = session?.templateId ? state.templates[session.templateId] : undefined;
+          const resolveObject = (objectName: string): number | undefined => {
+            // Try to find object by name from template
+            if (template) {
+              const varDef = template.objectDefinitions.find(
+                (v) => v.name.toLowerCase() === objectName.toLowerCase() || v.id === objectName
+              );
+              if (varDef) {
+                // Try player object first
+                const playerVar = getObjectValue(state, session.id, varDef.id, playerId);
+                if (playerVar !== undefined) {
+                  // Handle set types - convert to number for formulas
+                  if (varDef.type === "set") {
+                    if (varDef.setType === "identical") {
+                      return typeof playerVar === "number" ? playerVar : 0;
+                    } else if (varDef.setType === "elements") {
+                      // For elements sets, return total count
+                      if (Array.isArray(playerVar)) {
+                        return (playerVar as any[]).reduce((sum, el) => sum + (el.quantity || 0), 0);
+                      }
+                      return 0;
+                    }
+                  }
+                  if (typeof playerVar === "number") {
+                    return playerVar;
+                  }
+                }
+                // Try session object
+                const sessionVar = getObjectValue(state, session.id, varDef.id);
+                if (sessionVar !== undefined) {
+                  // Handle set types - convert to number for formulas
+                  if (varDef.type === "set") {
+                    if (varDef.setType === "identical") {
+                      return typeof sessionVar === "number" ? sessionVar : 0;
+                    } else if (varDef.setType === "elements") {
+                      // For elements sets, return total count
+                      if (Array.isArray(sessionVar)) {
+                        return (sessionVar as any[]).reduce((sum, el) => sum + (el.quantity || 0), 0);
+                      }
+                      return 0;
+                    }
+                  }
+                  if (typeof sessionVar === "number") {
+                    return sessionVar;
+                  }
+                }
+              }
+            }
+            return undefined;
+          };
+          
+          // Get round index for context
+          const roundIndex = selectedRoundId ? (state.rounds[selectedRoundId]?.index || 0) : 0;
+          
+          value = evaluateFormula(
+            category.formula,
+            {
+              categories: baseTotals,
+              total: Object.values(baseTotals).reduce((sum, val) => sum + val, 0),
+              round: roundIndex,
+            },
+            getCategoryValue,
+            resolveObject
+          );
+        }
+      } catch (error) {
+        console.error(`Failed to evaluate formula for category ${category.name} (formula: "${category.formula}"):`, error);
+        value = 1; // Fallback to default
+      }
+    }
+    
+    // Apply mode (add or subtract)
+    const finalValue = mode === "subtract" ? -value : value;
+    
+    // Check if negative values are allowed
+    if (finalValue < 0 && !session.settings.allowNegative) {
+      return;
+    }
+    
+    // Create entry directly without opening modal
+    const entry: ScoreEntry = {
+      id: createId(),
+      sessionId: session.id,
+      playerId,
+      createdAt: Date.now(),
+      value: finalValue,
+      roundId: session.settings.roundsEnabled ? selectedRoundId : undefined,
+      categoryId,
+      source: "manual",
+    };
+    dispatch({ type: "entry/add", payload: entry });
   };
 
   const handleSaveEntry = () => {
