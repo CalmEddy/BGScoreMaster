@@ -3,6 +3,7 @@ import { computeCategoryTotals, computePlayerTotal, formatCategoryName } from ".
 import { createId } from "../lib/id";
 import { AppAction, AppState, ScoreEntry, Session } from "../state/types";
 import { sortEntries } from "../state/store";
+import { getSessionTemplateCategories } from "../lib/templateApplication";
 
 const PlayerDetail = ({
   state,
@@ -32,6 +33,12 @@ const PlayerDetail = ({
     () => computePlayerTotal(state, session.id, playerId),
     [state, session.id, playerId]
   );
+  
+  // Get template categories for this session (categories are now in templates, not state.categories)
+  const templateCategories = useMemo(() => {
+    return getSessionTemplateCategories(state, session);
+  }, [state.templates, session.templateId, session.categoryTemplateIds]);
+  
   const [adjustmentValue, setAdjustmentValue] = useState("0");
   const [overrideTotalValue, setOverrideTotalValue] = useState("");
   const [adjustmentError, setAdjustmentError] = useState<string | null>(null);
@@ -127,7 +134,7 @@ const PlayerDetail = ({
             <div className="card-title">Totals by category</div>
             {Object.entries(totalsByCategory).map(([categoryId, total]) => (
               <div key={categoryId} className="inline" style={{ justifyContent: "space-between" }}>
-                <span>{formatCategoryName(state.categories, categoryId)}</span>
+                <span>{formatCategoryName(templateCategories, categoryId)}</span>
                 <strong>{total}</strong>
               </div>
             ))}
@@ -161,7 +168,7 @@ const PlayerDetail = ({
                   </div>
                   <small>
                     {entry.categoryId
-                      ? formatCategoryName(state.categories, entry.categoryId)
+                      ? formatCategoryName(templateCategories, entry.categoryId)
                       : "Uncategorized"}
                     {entry.roundId
                       ? ` • ${state.rounds[entry.roundId]?.label ?? "(deleted)"}`

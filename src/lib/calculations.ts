@@ -362,9 +362,18 @@ export const findWinners = (totals: Record<string, number>, direction: "higherWi
 };
 
 export const formatCategoryName = (
-  categories: Record<string, Category>,
+  categories: Record<string, Category> | CategoryTemplate[],
   categoryId: string | undefined
 ): string => {
   if (!categoryId) return "Uncategorized";
-  return categories[categoryId]?.name ?? "(deleted)";
+  
+  // Handle both old format (Record<string, Category>) and new format (CategoryTemplate[])
+  if (Array.isArray(categories)) {
+    // New format: array of CategoryTemplate
+    const category = categories.find(cat => cat.id === categoryId);
+    return category?.name ?? "(deleted)";
+  } else {
+    // Old format: Record<string, Category>
+    return categories[categoryId]?.name ?? "(deleted)";
+  }
 };
