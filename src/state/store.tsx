@@ -59,7 +59,7 @@ const reducer = (state: AppState, action: AppAction): AppState => {
 
       // Remove all related data
       const playersToRemove = session.playerIds || [];
-      const categoriesToRemove = session.categoryIds || [];
+      // Note: No categories to remove - categories are in templates, not sessions
       const roundsToRemove = session.roundIds || [];
       const rulesToRemove = session.ruleIds || [];
       const objectValuesToRemove = session.objectValueIds || [];
@@ -71,12 +71,7 @@ const reducer = (state: AppState, action: AppAction): AppState => {
           )
         : {};
 
-      // Filter out categories
-      const remainingCategories = state.categories
-        ? Object.fromEntries(
-            Object.entries(state.categories).filter(([id]) => !categoriesToRemove.includes(id))
-          )
-        : {};
+      // Note: Categories are in templates, not sessions - no need to filter
 
       // Filter out rounds
       const remainingRounds = state.rounds
@@ -124,7 +119,8 @@ const reducer = (state: AppState, action: AppAction): AppState => {
         ...state,
         sessions: remainingSessions,
         players: remainingPlayers,
-        categories: remainingCategories,
+        // Categories are in templates, not sessions - keep existing categories state
+        categories: state.categories,
         rounds: remainingRounds,
         rules: remainingRules,
         entries: remainingEntries,
@@ -185,21 +181,11 @@ const reducer = (state: AppState, action: AppAction): AppState => {
       };
     }
     case "category/remove": {
-      const { categoryId, sessionId } = action.payload;
-      const { [categoryId]: _, ...restCategories } = state.categories;
-      const session = state.sessions[sessionId];
-      if (!session) return state;
-      return {
-        ...state,
-        categories: restCategories,
-        sessions: {
-          ...state.sessions,
-          [sessionId]: updateSessionTimestamp({
-            ...session,
-            categoryIds: session.categoryIds.filter((id) => id !== categoryId),
-          }),
-        },
-      };
+      // Categories are now in templates, not sessions
+      // This action should update the template instead
+      // For now, we'll handle this in the template update action
+      console.warn("category/remove is deprecated - categories are in templates");
+      return state;
     }
     case "round/add": {
       const round = action.payload;

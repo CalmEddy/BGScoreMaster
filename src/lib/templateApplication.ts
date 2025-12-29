@@ -1,5 +1,5 @@
 import { createId } from "./id";
-import { AppState, Category, GameTemplate, Player, Round, ScoringRule, Session } from "../state/types";
+import { AppState, CategoryTemplate, GameTemplate, Player, Round, ScoringRule, Session } from "../state/types";
 import { initializeObjectsFromTemplate } from "./objectStorage";
 
 export const applyTemplate = (
@@ -12,6 +12,22 @@ export const applyTemplate = (
   void state;
   const sessionId = createId();
   const now = Date.now();
+
+  // Get all template category IDs (flattened, including children)
+  const getAllTemplateCategoryIds = (parentId?: string): string[] => {
+    const ids: string[] = [];
+    template.categoryTemplates
+      .filter((cat) => cat.parentId === parentId)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .forEach((catTemplate) => {
+        ids.push(catTemplate.id);
+        // Recursively get children
+        ids.push(...getAllTemplateCategoryIds(catTemplate.id));
+      });
+    return ids;
+  };
+
+  const categoryTemplateIds = getAllTemplateCategoryIds();
 
   // Create session
   const session: Session = {
@@ -29,7 +45,7 @@ export const applyTemplate = (
       showQuickAdd: true,
     },
     playerIds: [],
-    categoryIds: [],
+    categoryTemplateIds: categoryTemplateIds,
     roundIds: [],
     ruleIds: [],
     templateId: template.id,
@@ -51,44 +67,8 @@ export const applyTemplate = (
     dispatch({ type: "player/add", payload: player });
   });
 
-  // Create categories from templates
-  const categoryMap = new Map<string, string>(); // templateId -> actualId
-  const createCategories = (parentTemplateId?: string, parentActualId?: string) => {
-    template.categoryTemplates
-      .filter((cat) => cat.parentId === parentTemplateId)
-      .sort((a, b) => a.sortOrder - b.sortOrder)
-      .forEach((catTemplate) => {
-        const categoryId = createId();
-        categoryMap.set(catTemplate.id, categoryId);
-
-        const category: Category = {
-          id: categoryId,
-          sessionId,
-          name: catTemplate.name,
-          sortOrder: catTemplate.sortOrder,
-          parentCategoryId: parentActualId,
-          displayType: catTemplate.displayType,
-          weight: catTemplate.defaultWeight,
-          formula: catTemplate.defaultFormula,
-        };
-
-        dispatch({ type: "category/add", payload: category });
-        dispatch({
-          type: "session/update",
-          payload: {
-            ...session,
-            categoryIds: [...(session.categoryIds || []), categoryId],
-          },
-        });
-
-        // Recursively create children
-        createCategories(catTemplate.id, categoryId);
-      });
-  };
-
-  createCategories();
-
   // Create rules from templates
+  // Note: Rules now reference template category IDs directly
   const ruleIds: string[] = [];
   template.ruleTemplates
     .filter((rule) => rule.enabled)
@@ -96,27 +76,13 @@ export const applyTemplate = (
       const ruleId = createId();
       ruleIds.push(ruleId);
 
-      // Map category IDs in condition and action
-      const condition = {
-        ...ruleTemplate.condition,
-        categoryId: ruleTemplate.condition.categoryId
-          ? categoryMap.get(ruleTemplate.condition.categoryId)
-          : ruleTemplate.condition.categoryId,
-      };
-
-      const action = {
-        ...ruleTemplate.action,
-        targetCategoryId: ruleTemplate.action.targetCategoryId
-          ? categoryMap.get(ruleTemplate.action.targetCategoryId)
-          : ruleTemplate.action.targetCategoryId,
-      };
-
+      // Rules now use template category IDs directly (no mapping needed)
       const rule: ScoringRule = {
         id: ruleId,
         sessionId,
         name: ruleTemplate.name,
-        condition,
-        action,
+        condition: ruleTemplate.condition,
+        action: ruleTemplate.action,
         enabled: ruleTemplate.enabled,
       };
 
@@ -156,7 +122,7 @@ export const applyTemplate = (
     payload: {
       ...session,
       playerIds: playerObjects.map((p) => p.id),
-      categoryIds: Array.from(categoryMap.values()),
+      categoryTemplateIds: categoryTemplateIds,
       ruleIds,
       roundIds,
       objectValueIds,
@@ -176,40 +142,25 @@ export const applyTemplateToExistingSession = (
   const sessionId = session.id;
   const existingPlayers = session.playerIds.map((id) => state.players[id]).filter(Boolean);
 
-  // Create categories from templates
-  const categoryMap = new Map<string, string>(); // templateId -> actualId
-  const newCategoryIds: string[] = [];
-  
-  const createCategories = (parentTemplateId?: string, parentActualId?: string) => {
+  // Get all template category IDs (flattened, including children)
+  const getAllTemplateCategoryIds = (parentId?: string): string[] => {
+    const ids: string[] = [];
     template.categoryTemplates
-      .filter((cat) => cat.parentId === parentTemplateId)
+      .filter((cat) => cat.parentId === parentId)
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .forEach((catTemplate) => {
-        const categoryId = createId();
-        categoryMap.set(catTemplate.id, categoryId);
-        newCategoryIds.push(categoryId);
-
-        const category: Category = {
-          id: categoryId,
-          sessionId,
-          name: catTemplate.name,
-          sortOrder: catTemplate.sortOrder,
-          parentCategoryId: parentActualId,
-          displayType: catTemplate.displayType,
-          weight: catTemplate.defaultWeight,
-          formula: catTemplate.defaultFormula,
-        };
-
-        dispatch({ type: "category/add", payload: category });
-
-        // Recursively create children
-        createCategories(catTemplate.id, categoryId);
+        ids.push(catTemplate.id);
+        // Recursively get children
+        ids.push(...getAllTemplateCategoryIds(catTemplate.id));
       });
+    return ids;
   };
 
-  createCategories();
+  const newCategoryTemplateIds = getAllTemplateCategoryIds();
+  const existingCategoryTemplateIds = session.categoryTemplateIds || [];
 
   // Create rules from templates
+  // Note: Rules now reference template category IDs directly
   const newRuleIds: string[] = [];
   template.ruleTemplates
     .filter((rule) => rule.enabled)
@@ -217,27 +168,13 @@ export const applyTemplateToExistingSession = (
       const ruleId = createId();
       newRuleIds.push(ruleId);
 
-      // Map category IDs in condition and action
-      const condition = {
-        ...ruleTemplate.condition,
-        categoryId: ruleTemplate.condition.categoryId
-          ? categoryMap.get(ruleTemplate.condition.categoryId)
-          : ruleTemplate.condition.categoryId,
-      };
-
-      const action = {
-        ...ruleTemplate.action,
-        targetCategoryId: ruleTemplate.action.targetCategoryId
-          ? categoryMap.get(ruleTemplate.action.targetCategoryId)
-          : ruleTemplate.action.targetCategoryId,
-      };
-
+      // Rules now use template category IDs directly (no mapping needed)
       const rule: ScoringRule = {
         id: ruleId,
         sessionId,
         name: ruleTemplate.name,
-        condition,
-        action,
+        condition: ruleTemplate.condition,
+        action: ruleTemplate.action,
         enabled: ruleTemplate.enabled,
       };
 
@@ -263,12 +200,17 @@ export const applyTemplateToExistingSession = (
   });
 
   // Update session with new template ID and added resources
+  // Merge category template IDs (avoid duplicates)
+  const mergedCategoryTemplateIds = [
+    ...new Set([...existingCategoryTemplateIds, ...newCategoryTemplateIds])
+  ];
+
   dispatch({
     type: "session/update",
     payload: {
       ...session,
       templateId: template.id,
-      categoryIds: [...(session.categoryIds || []), ...newCategoryIds],
+      categoryTemplateIds: mergedCategoryTemplateIds,
       ruleIds: [...(session.ruleIds || []), ...newRuleIds],
       objectValueIds: [...existingGameObjectValueIds, ...newGameObjectValueIds],
     },
@@ -293,4 +235,26 @@ export const validateTemplateCompatibility = (
     compatible: errors.length === 0,
     errors,
   };
+};
+
+/**
+ * Get template categories for a session.
+ * Returns the CategoryTemplate objects from the session's template.
+ */
+export const getSessionTemplateCategories = (
+  state: AppState,
+  session: Session
+): CategoryTemplate[] => {
+  if (!session.templateId) return [];
+  const template = state.templates[session.templateId];
+  if (!template) return [];
+  
+  // If session has categoryTemplateIds, filter to those; otherwise return all
+  if (session.categoryTemplateIds && session.categoryTemplateIds.length > 0) {
+    return template.categoryTemplates.filter((cat) =>
+      session.categoryTemplateIds.includes(cat.id)
+    );
+  }
+  
+  return template.categoryTemplates;
 };

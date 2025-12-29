@@ -90,7 +90,11 @@ const Rules = ({
                         <strong>If:</strong>{" "}
                         {rule.condition.type === "total" && "Total score"}
                         {rule.condition.type === "category" &&
-                          `Category "${state.categories[rule.condition.categoryId || ""]?.name || "Unknown"}"`}
+                          (() => {
+                            const template = session.templateId ? state.templates[session.templateId] : undefined;
+                            const category = template?.categoryTemplates.find((c) => c.id === rule.condition.categoryId);
+                            return `Category "${category?.name || "Unknown"}"`;
+                          })()}
                         {rule.condition.type === "round" && "Round entries"}
                         {` ${rule.condition.operator} ${rule.condition.value}`}
                       </div>
@@ -100,7 +104,11 @@ const Rules = ({
                         {rule.action.type === "multiply" && `Multiply by ${rule.action.value}`}
                         {rule.action.type === "set" && `Set to ${rule.action.value} points`}
                         {rule.action.targetCategoryId &&
-                          ` to "${state.categories[rule.action.targetCategoryId]?.name || "Unknown"}"`}
+                          (() => {
+                            const template = session.templateId ? state.templates[session.templateId] : undefined;
+                            const category = template?.categoryTemplates.find((c) => c.id === rule.action.targetCategoryId);
+                            return ` to "${category?.name || "Unknown"}"`;
+                          })()}
                       </div>
                     </div>
                     <div className="inline">

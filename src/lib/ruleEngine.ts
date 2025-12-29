@@ -152,9 +152,37 @@ export function evaluateRules(
   const session = state.sessions[sessionId];
   if (!session) return [];
 
+  // Always get fresh template from state - don't cache it
+  // Get rules from session, but also check if they still exist in the template
+  // This ensures that if a rule was removed from the template, it won't be evaluated
+  const template = session.templateId ? state.templates[session.templateId] : undefined;
+  
+  // If template doesn't exist or has no rules, don't evaluate any rules
+  if (!template || !template.ruleTemplates || template.ruleTemplates.length === 0) {
+    return [];
+  }
+
   const rules = (session.ruleIds || [])
     .map((id) => state.rules[id])
-    .filter((rule): rule is ScoringRule => rule !== undefined && rule.enabled);
+    .filter((rule): rule is ScoringRule => {
+      if (!rule || !rule.enabled) return false;
+      // Only include rules that still exist in the template
+      // Match by condition/action since session rules have different IDs than template rules
+      const matchesTemplateRule = template.ruleTemplates.some((templateRule) => {
+        return (
+          templateRule.condition.type === rule.condition.type &&
+          templateRule.condition.operator === rule.condition.operator &&
+          templateRule.condition.value === rule.condition.value &&
+          templateRule.condition.categoryId === rule.condition.categoryId &&
+          templateRule.condition.roundId === rule.condition.roundId &&
+          templateRule.action.type === rule.action.type &&
+          templateRule.action.value === rule.action.value &&
+          templateRule.action.targetCategoryId === rule.action.targetCategoryId &&
+          templateRule.enabled
+        );
+      });
+      return matchesTemplateRule;
+    });
 
   const context: RuleEvaluationContext = {
     playerId,
@@ -167,9 +195,12 @@ export function evaluateRules(
 
   for (const rule of rules) {
     try {
-      if (evaluateCondition(rule.condition, context)) {
+      const conditionMet = evaluateCondition(rule.condition, context);
+      console.debug(`Rule "${rule.name}": condition met=${conditionMet} for player ${playerId}`);
+      if (conditionMet) {
         const entry = applyRuleAction(rule, context);
         if (entry) {
+          console.debug(`Rule "${rule.name}" creating entry: playerId=${entry.playerId}, value=${entry.value}`);
           entries.push(entry);
         }
       }

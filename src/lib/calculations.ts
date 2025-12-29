@@ -1,8 +1,9 @@
-import { AppState, Category, ScoreEntry } from "../state/types";
+import { AppState, Category, CategoryTemplate, ScoreEntry } from "../state/types";
 import { evaluateFormula, ExtendedFormulaContext } from "./formulaParser";
 import { getObjectValue } from "./objectStorage";
 import { evaluateAllObjects } from "./objectEvaluation";
 import { getGameObjectState as getObjState } from "./objectCalculator";
+import { getSessionTemplateCategories } from "./templateApplication";
 
 export const getSessionEntries = (state: AppState, sessionId: string): ScoreEntry[] =>
   Object.values(state.entries || {}).filter((entry) => entry.sessionId === sessionId);
@@ -20,6 +21,12 @@ const computeBaseCategoryTotals = (
       const key = entry.categoryId ?? "uncategorized";
       totals[key] = (totals[key] ?? 0) + entry.value;
     });
+  
+  // Debug: Log category totals for specific category
+  if (totals["5xujgrn0wr"] !== undefined) {
+    console.debug(`computeBaseCategoryTotals: category 5xujgrn0wr = ${totals["5xujgrn0wr"]}`);
+  }
+  
   return totals;
 };
 
@@ -30,16 +37,18 @@ const computeNestedCategoryTotals = (
   categoryTotals: Record<string, number>
 ): Record<string, number> => {
   const result = { ...categoryTotals };
-  const categories = Object.values(state.categories).filter((c) => c.sessionId === sessionId);
+  const session = state.sessions[sessionId];
+  if (!session) return result;
+  const categories = getSessionTemplateCategories(state, session);
 
   // Build parent-child relationships
-  const childrenByParent: Record<string, Category[]> = {};
+  const childrenByParent: Record<string, CategoryTemplate[]> = {};
   categories.forEach((cat) => {
-    if (cat.parentCategoryId) {
-      if (!childrenByParent[cat.parentCategoryId]) {
-        childrenByParent[cat.parentCategoryId] = [];
+    if (cat.parentId) {
+      if (!childrenByParent[cat.parentId]) {
+        childrenByParent[cat.parentId] = [];
       }
-      childrenByParent[cat.parentCategoryId].push(cat);
+      childrenByParent[cat.parentId].push(cat);
     }
   });
 
@@ -74,8 +83,8 @@ const computeNestedCategoryTotals = (
   // This ensures we don't add parent categories that shouldn't be in the result
   Object.keys(categoryTotals).forEach((categoryId) => {
     const category = categories.find((c) => c.id === categoryId);
-    if (category?.parentCategoryId) {
-      computeParentTotal(category.parentCategoryId);
+    if (category?.parentId) {
+      computeParentTotal(category.parentId);
     }
   });
 
@@ -91,22 +100,49 @@ const applyFormulas = (
   currentRoundId?: string
 ): Record<string, number> => {
   const result = { ...categoryTotals };
-  const categories = Object.values(state.categories).filter(
-    (c) => c.sessionId === sessionId && c.displayType === "formula" && c.formula
+  const session = state.sessions[sessionId];
+  if (!session) return result;
+  const template = session?.templateId ? state.templates[session.templateId] : undefined;
+  if (!template) return result;
+  
+  const allCategories = getSessionTemplateCategories(state, session);
+  const categories = allCategories.filter(
+    (c) => c.displayType === "formula" && c.defaultFormula
   );
 
-  const session = state.sessions[sessionId];
-  const template = session?.templateId ? state.templates[session.templateId] : undefined;
-
   categories.forEach((category) => {
-    if (!category.formula) return;
+    if (!category.defaultFormula) return;
+
+    // Only apply formulas if the category has entries (base total > 0 or category exists in base totals)
+    // Formula categories should not contribute to totals unless there are actual entries
+    const hasEntries = categoryTotals[category.id] !== undefined;
+    if (!hasEntries) {
+      // No entries for this category - don't apply formula, keep it at 0
+      return;
+    }
 
     try {
       // First, try to parse as a simple number (handles cases like "+3", "-5", "10")
-      const numericValue = Number(category.formula.trim());
-      if (!isNaN(numericValue) && isFinite(numericValue)) {
-        // Simple numeric formula - just use the number
-        result[category.id] = numericValue;
+      const trimmedFormula = category.defaultFormula.trim();
+      const numericValue = Number(trimmedFormula);
+      // Check if it's a valid number (Number("+7") = 7, Number("7") = 7, Number("abc") = NaN)
+      if (!isNaN(numericValue) && isFinite(numericValue) && trimmedFormula !== "") {
+        // Simple numeric formula - for formula categories, if there are entries, 
+        // the formula represents the value per entry, so we should use the sum of entries
+        // (which is already in result[category.id] from base totals)
+        // Only use the formula value if there are no entries
+        const baseTotal = categoryTotals[category.id] ?? 0;
+        if (baseTotal > 0) {
+          // There are entries - use the sum of entries, not the formula value
+          // The formula is used when creating entries (button behavior), not for totals
+          result[category.id] = baseTotal;
+        } else {
+          // No entries - use the formula value
+          result[category.id] = numericValue;
+        }
+        if (category.id === "5xujgrn0wr") {
+          console.debug(`applyFormulas: category 5xujgrn0wr formula="${trimmedFormula}" (numeric), baseTotal=${baseTotal}, result=${result[category.id]}`);
+        }
         return;
       }
       
@@ -116,15 +152,14 @@ const applyFormulas = (
         if (categoryNameOrId === "total") {
           return Object.values(result).reduce((sum, val) => sum + val, 0);
         }
-        // Try to find category by name first, then by ID (for backward compatibility)
-        const categories = Object.values(state.categories).filter((c) => c.sessionId === sessionId);
-        const category = categories.find(
+        // Try to find category by name first, then by ID in template
+        const foundCategory = allCategories.find(
           (cat) => cat.name.toLowerCase() === categoryNameOrId.toLowerCase() || cat.id === categoryNameOrId
         );
-        if (category) {
-          return result[category.id] ?? 0;
+        if (foundCategory) {
+          return result[foundCategory.id] ?? 0;
         }
-        // If not found, try direct lookup (for backward compatibility with old formulas using IDs)
+        // If not found, try direct lookup (categoryId in entries is template category ID)
         return result[categoryNameOrId] ?? 0;
       };
 
@@ -219,8 +254,8 @@ const applyFormulas = (
         getPhaseId: () => undefined, // Phase support is future
       };
 
-      const value = evaluateFormula(
-        category.formula,
+            const value = evaluateFormula(
+              category.defaultFormula,
         {
           categories: result,
           total: Object.values(result).reduce((sum, val) => sum + val, 0),
@@ -234,7 +269,8 @@ const applyFormulas = (
       result[category.id] = value;
     } catch (error) {
       // If formula fails, keep the base total
-      console.warn(`Formula error for category ${category.name}:`, error);
+      console.warn(`Formula error for category ${category.name} (formula: "${category.defaultFormula}"):`, error);
+      // Don't set result[category.id] - keep the base total from entries
     }
   });
 
@@ -248,7 +284,9 @@ const applyWeights = (
   categoryTotals: Record<string, number>
 ): Record<string, number> => {
   const result: Record<string, number> = {};
-  const categories = Object.values(state.categories).filter((c) => c.sessionId === sessionId);
+  const session = state.sessions[sessionId];
+  if (!session) return result;
+  const categories = getSessionTemplateCategories(state, session);
 
   // Process all category totals, preserving entries even if category doesn't exist
   Object.entries(categoryTotals).forEach(([categoryId, baseTotal]) => {
@@ -257,8 +295,8 @@ const applyWeights = (
     
     if (category) {
       // Category exists - apply weight if needed
-      if (category.displayType === "weighted" && category.weight) {
-        finalTotal = baseTotal * category.weight;
+      if (category.displayType === "weighted" && category.defaultWeight) {
+        finalTotal = baseTotal * category.defaultWeight;
       }
     }
     // Category doesn't exist (e.g., "uncategorized" or invalid categoryId) - preserve the total
@@ -284,15 +322,27 @@ export const computeCategoryTotals = (
 
   // Step 1: Compute base totals from entries (including any score entries from object impacts)
   let totals = computeBaseCategoryTotals(state, sessionId, playerId);
+  if (totals["5xujgrn0wr"] !== undefined && playerId === "xk9glf03et") {
+    console.debug(`computeCategoryTotals (after base): category 5xujgrn0wr = ${totals["5xujgrn0wr"]}`);
+  }
 
   // Step 2: Compute nested category totals (parents from children)
   totals = computeNestedCategoryTotals(state, sessionId, totals);
+  if (totals["5xujgrn0wr"] !== undefined && playerId === "xk9glf03et") {
+    console.debug(`computeCategoryTotals (after nested): category 5xujgrn0wr = ${totals["5xujgrn0wr"]}`);
+  }
 
   // Step 3: Apply formulas (with enhanced object support)
   totals = applyFormulas(state, sessionId, totals, playerId, currentRoundId);
+  if (totals["5xujgrn0wr"] !== undefined && playerId === "xk9glf03et") {
+    console.debug(`computeCategoryTotals (after formulas): category 5xujgrn0wr = ${totals["5xujgrn0wr"]}`);
+  }
 
   // Step 4: Apply weights
   totals = applyWeights(state, sessionId, totals);
+  if (totals["5xujgrn0wr"] !== undefined && playerId === "xk9glf03et") {
+    console.debug(`computeCategoryTotals (after weights): category 5xujgrn0wr = ${totals["5xujgrn0wr"]}`);
+  }
 
   return totals;
 };

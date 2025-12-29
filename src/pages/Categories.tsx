@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { createId } from "../lib/id";
-import { AppAction, AppState, Category, Session } from "../state/types";
-import { sortCategories, updateSession } from "../state/store";
+import { AppAction, AppState, CategoryTemplate, Session } from "../state/types";
+import { getSessionTemplateCategories } from "../lib/templateApplication";
 import CategoryConfigModal from "../components/CategoryConfigModal";
 
-type CategoryNode = Category & {
+type CategoryNode = CategoryTemplate & {
   children: CategoryNode[];
   level: number;
 };
@@ -20,15 +20,20 @@ const Categories = ({
   dispatch: React.Dispatch<AppAction>;
   onBack: () => void;
 }) => {
-  const allCategories = useMemo(
-    () => session.categoryIds.map((id) => state.categories[id]).filter(Boolean),
-    [session.categoryIds, state.categories]
-  );
+  // Always get fresh template from state - don't cache it
+  const template = useMemo(() => {
+    return session.templateId ? state.templates[session.templateId] : undefined;
+  }, [session.templateId, state.templates]);
+  
+  const allCategories = useMemo(() => {
+    if (!template) return [];
+    return getSessionTemplateCategories(state, session);
+  }, [state.templates, session.templateId, session.categoryTemplateIds, template]);
 
   const categoryTree = useMemo(() => {
     const buildTree = (parentId: string | undefined, level: number): CategoryNode[] => {
       return allCategories
-        .filter((cat) => cat.parentCategoryId === parentId)
+        .filter((cat) => cat.parentId === parentId)
         .sort((a, b) => a.sortOrder - b.sortOrder)
         .map((cat) => ({
           ...cat,
@@ -42,30 +47,28 @@ const Categories = ({
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [newName, setNewName] = useState("");
   const [parentForNew, setParentForNew] = useState<string | undefined>(undefined);
-  const [configCategory, setConfigCategory] = useState<Category | null>(null);
+  const [configCategory, setConfigCategory] = useState<CategoryTemplate | null>(null);
 
   const handleAdd = () => {
-    if (!newName.trim()) return;
+    if (!newName.trim() || !template) return;
     const maxSortOrder = allCategories.length > 0
       ? Math.max(...allCategories.map((c) => c.sortOrder))
       : 0;
-    const category: Category = {
+    const category: CategoryTemplate = {
       id: createId(),
-      sessionId: session.id,
       name: newName.trim(),
       sortOrder: maxSortOrder + 1,
-      parentCategoryId: parentForNew,
+      parentId: parentForNew,
       displayType: "sum",
-      weight: 1.0,
+      defaultWeight: 1.0,
+      required: false,
     };
-    dispatch({ type: "category/add", payload: category });
-    dispatch({
-      type: "session/update",
-      payload: updateSession({
-        ...session,
-        categoryIds: [...session.categoryIds, category.id],
-      }),
-    });
+    const updatedTemplate = {
+      ...template,
+      categoryTemplates: [...template.categoryTemplates, category],
+      updatedAt: Date.now(),
+    };
+    dispatch({ type: "template/update", payload: updatedTemplate });
     setNewName("");
     setParentForNew(undefined);
     if (parentForNew) {
@@ -90,28 +93,49 @@ const Categories = ({
     setExpandedCategories((prev) => new Set(prev).add(parentId));
   };
 
-  const handleUpdate = (category: Category, name: string) => {
-    dispatch({ type: "category/update", payload: { ...category, name } });
+  const handleUpdate = (category: CategoryTemplate, name: string) => {
+    if (!template) return;
+    const updatedTemplate = {
+      ...template,
+      categoryTemplates: template.categoryTemplates.map((cat) =>
+        cat.id === category.id ? { ...cat, name } : cat
+      ),
+      updatedAt: Date.now(),
+    };
+    dispatch({ type: "template/update", payload: updatedTemplate });
   };
 
-  const handleRemove = (category: Category) => {
+  const handleRemove = (category: CategoryTemplate) => {
     if (!window.confirm("Delete this category?")) return;
-    dispatch({ type: "category/remove", payload: { sessionId: session.id, categoryId: category.id } });
+    if (!template) return;
+    const updatedTemplate = {
+      ...template,
+      categoryTemplates: template.categoryTemplates.filter((cat) => cat.id !== category.id),
+      updatedAt: Date.now(),
+    };
+    dispatch({ type: "template/update", payload: updatedTemplate });
   };
 
-  const swapOrder = (category: Category, direction: number) => {
+  const swapOrder = (category: CategoryTemplate, direction: number) => {
+    if (!template) return;
     const siblings = allCategories.filter(
-      (c) => c.parentCategoryId === category.parentCategoryId && c.id !== category.id
+      (c) => c.parentId === category.parentId && c.id !== category.id
     );
-    const sortedSiblings = sortCategories(siblings);
+    const sortedSiblings = [...siblings].sort((a, b) => a.sortOrder - b.sortOrder);
     const currentIndex = sortedSiblings.findIndex((c) => c.sortOrder >= category.sortOrder);
     const targetIndex = currentIndex + direction;
     if (targetIndex < 0 || targetIndex >= sortedSiblings.length) return;
     const target = sortedSiblings[targetIndex];
-    const current = { ...category, sortOrder: target.sortOrder };
-    const targetUpdated = { ...target, sortOrder: category.sortOrder };
-    dispatch({ type: "category/update", payload: current });
-    dispatch({ type: "category/update", payload: targetUpdated });
+    const updatedTemplate = {
+      ...template,
+      categoryTemplates: template.categoryTemplates.map((cat) => {
+        if (cat.id === category.id) return { ...cat, sortOrder: target.sortOrder };
+        if (cat.id === target.id) return { ...cat, sortOrder: category.sortOrder };
+        return cat;
+      }),
+      updatedAt: Date.now(),
+    };
+    dispatch({ type: "template/update", payload: updatedTemplate });
   };
 
   const renderCategoryNode = (node: CategoryNode) => {
@@ -149,7 +173,7 @@ const Categories = ({
             />
             {node.displayType !== "sum" && (
               <span className="badge" style={{ fontSize: "0.75rem" }}>
-                {node.displayType === "formula" ? "Formula" : `${node.weight}x`}
+                {node.displayType === "formula" ? "Formula" : `${node.defaultWeight}x`}
               </span>
             )}
           </div>
@@ -171,7 +195,7 @@ const Categories = ({
             <button
               className="button secondary"
               onClick={() => swapOrder(node, -1)}
-              disabled={node.level === 0 && allCategories.filter((c) => !c.parentCategoryId).indexOf(node) === 0}
+              disabled={node.level === 0 && allCategories.filter((c) => !c.parentId).indexOf(node) === 0}
             >
               ↑
             </button>
@@ -180,8 +204,8 @@ const Categories = ({
               onClick={() => swapOrder(node, 1)}
               disabled={
                 node.level === 0 &&
-                allCategories.filter((c) => !c.parentCategoryId).indexOf(node) ===
-                  allCategories.filter((c) => !c.parentCategoryId).length - 1
+                allCategories.filter((c) => !c.parentId).indexOf(node) ===
+                  allCategories.filter((c) => !c.parentId).length - 1
               }
             >
               ↓
@@ -264,9 +288,18 @@ const Categories = ({
         <CategoryConfigModal
           category={configCategory}
           state={state}
+          sessionId={session.id}
           onClose={() => setConfigCategory(null)}
           onSave={(updated) => {
-            dispatch({ type: "category/update", payload: updated });
+            if (!template) return;
+            const updatedTemplate = {
+              ...template,
+              categoryTemplates: template.categoryTemplates.map((cat) =>
+                cat.id === updated.id ? updated : cat
+              ),
+              updatedAt: Date.now(),
+            };
+            dispatch({ type: "template/update", payload: updatedTemplate });
             setConfigCategory(null);
           }}
         />

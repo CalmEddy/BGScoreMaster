@@ -6,7 +6,7 @@ import { computePlayerTotal, findWinners, getSessionEntries } from "../lib/calcu
 import { getObjectValue } from "../lib/objectStorage";
 import { evaluateRules } from "../lib/ruleEngine";
 import { getSessionObjects } from "../lib/objectStorage";
-import { applyTemplateToExistingSession, validateTemplateCompatibility } from "../lib/templateApplication";
+import { applyTemplateToExistingSession, validateTemplateCompatibility, getSessionTemplateCategories } from "../lib/templateApplication";
 import { evaluateFormula } from "../lib/formulaParser";
 import {
   AppAction,
@@ -37,9 +37,19 @@ const Scoreboard = ({
   const players = buildSeatOrder(
     session.playerIds.map((id) => state.players[id]).filter(Boolean)
   );
-  const categories = sortCategories(
-    session.categoryIds.map((id) => state.categories[id]).filter(Boolean)
-  );
+  
+  // Always get fresh template from state - don't cache it
+  const template = useMemo(() => {
+    return session.templateId ? state.templates[session.templateId] : undefined;
+  }, [session.templateId, state.templates]);
+  
+  const categories = useMemo(() => {
+    if (!template) return [];
+    const templateCategories = getSessionTemplateCategories(state, session);
+    // Convert CategoryTemplate to a format compatible with sortCategories
+    // We'll create a simple adapter that matches the expected structure
+    return templateCategories.sort((a, b) => a.sortOrder - b.sortOrder);
+  }, [state.templates, session.templateId, session.categoryTemplateIds, template]);
   const rounds = sortRounds(session.roundIds.map((id) => state.rounds[id]).filter(Boolean));
   const [selectedRoundId, setSelectedRoundId] = useState<string | undefined>(
     rounds[rounds.length - 1]?.id
@@ -58,17 +68,58 @@ const Scoreboard = ({
     showQuickAdd: session.settings.showQuickAdd ?? true,
   };
 
-  // Auto-evaluate rules when entries change
+  // Auto-evaluate rules when entries change, but only for entries that are manual (not from rules)
+  // This prevents rule entries from triggering more rule evaluations (infinite loop)
   useEffect(() => {
     if (!session) return;
     const sessionEntries = getSessionEntries(state, session.id);
     if (sessionEntries.length === 0) return;
 
-    // Evaluate rules for all players
-    session.playerIds.forEach((playerId) => {
-      const ruleEntries = evaluateRules(state, session.id, playerId, selectedRoundId);
-      // Only add rules that don't already exist (prevent duplicates)
-      ruleEntries.forEach((ruleEntry) => {
+    // Find the most recent manual entry (not from rules)
+    const recentManualEntries = sessionEntries
+      .filter((e) => e.source === "manual")
+      .sort((a, b) => b.createdAt - a.createdAt);
+    
+    if (recentManualEntries.length === 0) return;
+    
+    // Only evaluate rules for the player who made the most recent manual entry
+    const mostRecentEntry = recentManualEntries[0];
+    const playerId = mostRecentEntry.playerId;
+    
+    // Only evaluate if this entry was created very recently (within last 1 second)
+    // This prevents re-evaluating rules for old entries
+    const timeSinceEntry = Date.now() - mostRecentEntry.createdAt;
+    if (timeSinceEntry > 1000) {
+      console.debug(`Manual entry too old (${timeSinceEntry}ms), skipping rule evaluation`);
+      return;
+    }
+    
+    // Check if we've already processed this entry by looking for rule entries created right after it
+    // This prevents the useEffect from running multiple times for the same manual entry
+    const ruleEntriesForThisEntry = sessionEntries.filter(
+      (e) => 
+        e.source === "ruleEngine" && 
+        e.playerId === playerId &&
+        e.createdAt > mostRecentEntry.createdAt &&
+        e.createdAt < mostRecentEntry.createdAt + 2000 // Within 2 seconds of manual entry
+    );
+    
+    // If we already have rule entries for this manual entry, skip evaluation
+    if (ruleEntriesForThisEntry.length > 0) {
+      console.debug(`Already processed rules for manual entry (found ${ruleEntriesForThisEntry.length} rule entries), skipping`);
+      return;
+    }
+    
+    console.debug(`Evaluating rules for player ${playerId} after manual entry`);
+    const ruleEntries = evaluateRules(state, session.id, playerId, selectedRoundId);
+    
+    console.debug(`Found ${ruleEntries.length} rule entries for player ${playerId}`);
+    
+    // Only add rules that don't already exist (prevent duplicates)
+    ruleEntries.forEach((ruleEntry) => {
+      console.debug(`Rule entry: playerId=${ruleEntry.playerId}, value=${ruleEntry.value}, categoryId=${ruleEntry.categoryId}, note=${ruleEntry.note}`);
+      // Only add if it's for the same player and doesn't already exist
+      if (ruleEntry.playerId === playerId) {
         const existing = state.entries ? Object.values(state.entries).find(
           (e) =>
             e.sessionId === ruleEntry.sessionId &&
@@ -79,12 +130,23 @@ const Scoreboard = ({
             Math.abs(e.createdAt - ruleEntry.createdAt) < 1000 // Within 1 second
         ) : undefined;
         if (!existing) {
+          console.debug(`Adding rule entry for player ${ruleEntry.playerId}`);
           dispatch({ type: "entry/add", payload: ruleEntry });
+        } else {
+          console.debug(`Rule entry already exists, skipping`);
         }
-      });
+      } else {
+        console.warn(`Rule entry has wrong playerId: expected ${playerId}, got ${ruleEntry.playerId} - skipping`);
+      }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.entries ? Object.keys(state.entries).length : 0, session?.id, selectedRoundId]);
+  }, [
+    state.entries ? Object.keys(state.entries).length : 0,
+    state.templates, // Include templates so rules are re-evaluated when template changes
+    session?.id,
+    session?.templateId, // Include templateId so rules are re-evaluated when template changes
+    selectedRoundId
+  ]);
 
   useEffect(() => {
     if (!session.settings.roundsEnabled || rounds.length > 0) return;
@@ -103,18 +165,44 @@ const Scoreboard = ({
     setSelectedRoundId(roundId);
   }, [dispatch, rounds.length, session, session.id, session.settings.roundsEnabled]);
 
+  // Create a stable key for entries to ensure useMemo recalculates when entries change
+  const entriesKey = useMemo(() => {
+    if (!state.entries) return "0";
+    const sessionEntryIds = getSessionEntries(state, session.id)
+      .map(e => e.id)
+      .sort()
+      .join(",");
+    return `${Object.keys(state.entries).length}:${sessionEntryIds}`;
+  }, [state.entries, session.id]);
+
   const totals = useMemo(() => {
     const result: Record<string, number> = {};
+    // Debug: Log entry count to verify state.entries is updating
+    const entryCount = state.entries ? Object.keys(state.entries).length : 0;
+    const sessionEntryCount = getSessionEntries(state, session.id).length;
+    console.debug(`Computing totals: ${entryCount} total entries in state, ${sessionEntryCount} for this session`);
+    
     players.forEach((player) => {
-      result[player.id] = computePlayerTotal(state, session.id, player.id);
+      // Debug: Log entries for this player
+      const playerEntries = getSessionEntries(state, session.id).filter(e => e.playerId === player.id);
+      console.debug(`Player ${player.name} (${player.id}): ${playerEntries.length} entries`);
+      if (playerEntries.length > 0) {
+        const entryValues = playerEntries.map(e => `${e.categoryId || 'uncat'}:${e.value}`).join(", ");
+        console.debug(`  Entry values: ${entryValues}`);
+      }
+      
+      const total = computePlayerTotal(state, session.id, player.id);
+      result[player.id] = total;
+      console.debug(`Computed total for player ${player.name} (${player.id}): ${total}`);
     });
     return result;
   }, [
     players,
     session.id,
-    state.entries,
+    session.templateId, // Include templateId so totals recalculate when template changes
+    entriesKey, // Use entriesKey to ensure recalculation when entries change
     state.objectValues,
-    state.categories,
+    state.templates, // Include templates so totals recalculate when template data changes
   ]);
 
   const winners = useMemo(
@@ -145,9 +233,18 @@ const Scoreboard = ({
   };
 
   const handleCategoryAction = (playerId: string, categoryId: string, mode: "add" | "subtract") => {
-    const category = state.categories[categoryId];
+    // Debug: Log the playerId being used
+    console.debug(`handleCategoryAction called: playerId=${playerId}, categoryId=${categoryId}, mode=${mode}`);
+    
+    // Always get fresh template from state - don't use cached template
+    const currentTemplate = session.templateId ? state.templates[session.templateId] : undefined;
+    if (!currentTemplate) {
+      console.warn(`No template found for session ${session.id}`);
+      return;
+    }
+    const category = currentTemplate.categoryTemplates.find((cat) => cat.id === categoryId);
     if (!category) {
-      console.warn(`Category ${categoryId} not found`);
+      console.warn(`Category ${categoryId} not found in template`);
       return;
     }
     
@@ -155,10 +252,10 @@ const Scoreboard = ({
     
     // If category has a formula, evaluate it as a simple expression
     // For formulas like "3+3", "+3", "5", etc., this will evaluate correctly
-    if (category.formula) {
+    if (category.defaultFormula) {
       try {
         // First, try to parse as a simple number (handles cases like "+3", "-5", "10")
-        const trimmedFormula = category.formula.trim();
+        const trimmedFormula = category.defaultFormula.trim();
         const numericValue = Number(trimmedFormula);
         if (!isNaN(numericValue) && isFinite(numericValue)) {
           value = numericValue;
@@ -180,25 +277,29 @@ const Scoreboard = ({
             if (categoryNameOrId === "total") {
               return Object.values(baseTotals).reduce((sum, val) => sum + val, 0);
             }
-            // Try to find category by name first, then by ID
-            const categories = Object.values(state.categories).filter((c) => c.sessionId === session.id);
-            const foundCategory = categories.find(
+            // Try to find category by name first, then by ID in template
+            // Always use fresh template from state
+            const currentTemplate = session.templateId ? state.templates[session.templateId] : undefined;
+            if (!currentTemplate) return 0;
+            const foundCategory = currentTemplate.categoryTemplates.find(
               (cat) => cat.name.toLowerCase() === categoryNameOrId.toLowerCase() || cat.id === categoryNameOrId
             );
             if (foundCategory) {
               // Return base total (entries only) for the referenced category
+              // categoryId in entries is now a template category ID
               return baseTotals[foundCategory.id] ?? 0;
             }
-            // If not found, try direct lookup (for backward compatibility with old formulas using IDs)
+            // If not found, try direct lookup (categoryId in entries is template category ID)
             return baseTotals[categoryNameOrId] ?? 0;
           };
           
           // Build resolveObject function for game object references
-          const template = session?.templateId ? state.templates[session.templateId] : undefined;
+          // Always get fresh template from state
+          const currentTemplate = session.templateId ? state.templates[session.templateId] : undefined;
           const resolveObject = (objectName: string): number | undefined => {
             // Try to find object by name from template
-            if (template) {
-              const varDef = template.objectDefinitions.find(
+            if (currentTemplate) {
+              const varDef = currentTemplate.objectDefinitions.find(
                 (v) => v.name.toLowerCase() === objectName.toLowerCase() || v.id === objectName
               );
               if (varDef) {
@@ -249,7 +350,7 @@ const Scoreboard = ({
           const roundIndex = selectedRoundId ? (state.rounds[selectedRoundId]?.index || 0) : 0;
           
           value = evaluateFormula(
-            category.formula,
+            category.defaultFormula,
             {
               categories: baseTotals,
               total: Object.values(baseTotals).reduce((sum, val) => sum + val, 0),
@@ -260,7 +361,7 @@ const Scoreboard = ({
           );
         }
       } catch (error) {
-        console.error(`Failed to evaluate formula for category ${category.name} (formula: "${category.formula}"):`, error);
+        console.error(`Failed to evaluate formula for category ${category.name} (formula: "${category.defaultFormula}"):`, error);
         value = 1; // Fallback to default
       }
     }
@@ -277,14 +378,19 @@ const Scoreboard = ({
     const entry: ScoreEntry = {
       id: createId(),
       sessionId: session.id,
-      playerId,
+      playerId, // Make sure we're using the correct playerId
       createdAt: Date.now(),
       value: finalValue,
       roundId: session.settings.roundsEnabled ? selectedRoundId : undefined,
       categoryId,
       source: "manual",
     };
+    console.debug(`Creating entry: playerId=${entry.playerId}, value=${entry.value}, categoryId=${entry.categoryId}, entryId=${entry.id}`);
     dispatch({ type: "entry/add", payload: entry });
+    
+    // Evaluate rules only for the player who made this action (not all players)
+    // Use a ref to track if we're already evaluating rules to prevent infinite loops
+    // Rules will be evaluated after state updates via the useEffect below
   };
 
   const handleSaveEntry = () => {
@@ -307,38 +413,10 @@ const Scoreboard = ({
     setEntryPlayerId(null);
   };
 
-  // Auto-evaluate rules when entries change
-  useEffect(() => {
-    if (!session) return;
-    const sessionEntries = getSessionEntries(state, session.id);
-    if (sessionEntries.length === 0) return;
-
-    // Evaluate rules for all players
-    session.playerIds.forEach((playerId) => {
-      const ruleEntries = evaluateRules(state, session.id, playerId, selectedRoundId);
-      // Only add rules that don't already exist (prevent duplicates)
-      ruleEntries.forEach((ruleEntry) => {
-        const existing = state.entries ? Object.values(state.entries).find(
-          (e) =>
-            e.sessionId === ruleEntry.sessionId &&
-            e.playerId === ruleEntry.playerId &&
-            e.value === ruleEntry.value &&
-            e.categoryId === ruleEntry.categoryId &&
-            e.note === ruleEntry.note &&
-            Math.abs(e.createdAt - ruleEntry.createdAt) < 1000 // Within 1 second
-        ) : undefined;
-        if (!existing) {
-          dispatch({ type: "entry/add", payload: ruleEntry });
-        }
-      });
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    state.entries ? Object.keys(state.entries).length : 0,
-    state.objectValues ? Object.keys(state.objectValues).length : 0,
-    session?.id,
-    selectedRoundId
-  ]);
+  // Note: Rules are now evaluated in the useEffect above (lines 66-138)
+  // which only evaluates rules for the player who made the manual entry.
+  // This old useEffect that evaluated for all players has been removed to prevent
+  // rules from firing for all players when one player makes an action.
 
   const handleUndo = () => {
     const entries = sortEntries(getSessionEntries(state, session.id));
@@ -439,13 +517,15 @@ const Scoreboard = ({
 
         {session.templateId && displaySettings.showSessionObjects && (() => {
           const sessionObjects = getSessionObjects(state, session.id);
-          const template = state.templates[session.templateId!];
+          // Always get fresh template from state
+          const currentTemplate = session.templateId ? state.templates[session.templateId] : undefined;
+          if (!currentTemplate) return null;
           return sessionObjects.length > 0 ? (
             <div className="card stack">
               <div className="card-title">Session Objects</div>
               <div className="inline" style={{ gap: "8px", flexWrap: "wrap" }}>
                 {sessionObjects.map((objectValue) => {
-                  const varDef = template?.objectDefinitions.find((v) => v.id === objectValue.objectDefinitionId);
+                  const varDef = currentTemplate?.objectDefinitions.find((v) => v.id === objectValue.objectDefinitionId);
                   if (!varDef) return null;
                   // For sets, show a summary
                   let displayValue: string;
@@ -476,17 +556,27 @@ const Scoreboard = ({
         })()}
 
         <div className="player-grid">
-          {players.map((player) => (
+          {players.map((player) => {
+            // Create a stable callback for this specific player to avoid closure issues
+            const handlePlayerCategoryAction = (categoryId: string, mode: "add" | "subtract") => {
+              console.debug(`PlayerCard callback: playerId=${player.id}, playerName=${player.name}, categoryId=${categoryId}, mode=${mode}`);
+              handleCategoryAction(player.id, categoryId, mode);
+            };
+            
+            const playerTotal = totals[player.id] ?? 0;
+            console.debug(`Rendering PlayerCard: player=${player.name} (id=${player.id}), total=${playerTotal}`);
+            
+            return (
             <PlayerCard
               key={player.id}
               name={player.name}
-              total={totals[player.id] ?? 0}
+              total={playerTotal}
               isWinner={winners.includes(player.id)}
               allowNegative={session.settings.allowNegative}
               onQuickAdd={(value) => handleQuickAdd(player.id, value)}
               onAddEntry={() => handleOpenEntryModal(player.id)}
               onOpenLedger={() => onOpenPlayer(player.id)}
-              onCategoryAction={(categoryId, mode) => handleCategoryAction(player.id, categoryId, mode)}
+              onCategoryAction={handlePlayerCategoryAction}
               playerId={player.id}
               sessionId={session.id}
               state={state}
@@ -507,7 +597,8 @@ const Scoreboard = ({
                 }
               }}
             />
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -577,28 +668,28 @@ const Scoreboard = ({
           <div className="stack">
             <div className="card" style={{ background: "#f9fafb" }}>
               <div className="card-title">Template</div>
-              {session.templateId && state.templates[session.templateId] ? (
+              {template ? (
                 <>
                   <div className="inline" style={{ gap: "8px", marginBottom: "8px", alignItems: "center" }}>
-                    {state.templates[session.templateId].icon && (
-                      <span style={{ fontSize: "1.5rem" }}>{state.templates[session.templateId].icon}</span>
+                    {template.icon && (
+                      <span style={{ fontSize: "1.5rem" }}>{template.icon}</span>
                     )}
                     <div style={{ flex: 1 }}>
-                      <strong>{state.templates[session.templateId].name}</strong>
+                      <strong>{template.name}</strong>
                       <span className="badge" style={{ marginLeft: "8px" }}>
-                        {state.templates[session.templateId].gameType}
+                        {template.gameType}
                       </span>
                     </div>
                   </div>
-                  {state.templates[session.templateId].description && (
+                  {template?.description && (
                     <p style={{ fontSize: "0.875rem", color: "#6b7280", margin: "8px 0" }}>
-                      {state.templates[session.templateId].description}
+                      {template.description}
                     </p>
                   )}
                   <div style={{ fontSize: "0.75rem", color: "#9ca3af", marginBottom: "8px" }}>
-                    {state.templates[session.templateId].categoryTemplates?.length || 0} categories •{" "}
-                    {state.templates[session.templateId].ruleTemplates?.length || 0} rules •{" "}
-                    {state.templates[session.templateId].objectDefinitions?.length || 0} objects
+                    {template?.categoryTemplates?.length || 0} categories •{" "}
+                    {template?.ruleTemplates?.length || 0} rules •{" "}
+                    {template?.objectDefinitions?.length || 0} objects
                   </div>
                 </>
               ) : (

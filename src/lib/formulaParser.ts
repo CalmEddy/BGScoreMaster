@@ -406,16 +406,21 @@ export function evaluateFormula(
       throw new Error("No tokens found");
     }
 
-    // Handle unary minus
+    // Handle unary minus and unary plus
     const processedTokens: Token[] = [];
     for (let i = 0; i < tokens.length; i++) {
       const token = tokens[i];
-      if (token.type === "operator" && token.value === "-") {
+      if (token.type === "operator") {
         const prev = i > 0 ? tokens[i - 1] : null;
-        if (!prev || (prev.type !== "number" && prev.type !== "object" && prev.value !== ")")) {
+        const isUnary = !prev || (prev.type !== "number" && prev.type !== "object" && prev.value !== ")");
+        
+        if (token.value === "-" && isUnary) {
           // Unary minus - convert to (0 - ...)
           processedTokens.push({ type: "number", value: "0" });
           processedTokens.push({ type: "operator", value: "-" });
+          continue;
+        } else if (token.value === "+" && isUnary) {
+          // Unary plus - just skip it (since +value = value)
           continue;
         }
       }

@@ -17,7 +17,7 @@ export type Session = {
     showQuickAdd?: boolean;
   };
   playerIds: ID[];
-  categoryIds: ID[];
+  categoryTemplateIds: ID[]; // References template category IDs, not session categories
   roundIds: ID[];
   ruleIds: ID[];
   templateId?: ID;

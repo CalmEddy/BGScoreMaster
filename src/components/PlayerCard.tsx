@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { AppState, GameObjectValue, GameObjectDefinition } from "../state/types";
 import { getPlayerObjects } from "../lib/objectStorage";
+import { getSessionTemplateCategories } from "../lib/templateApplication";
 import ObjectRenderer from "./ObjectRenderer";
 
 const quickValues = [1, 5, 10, -1, -5, -10];
@@ -44,12 +45,13 @@ const PlayerCard = ({
     return getPlayerObjects(state, sessionId, playerId);
   }, [playerId, sessionId, state]);
 
+  // Always get fresh template from state - include state.templates in dependencies
   const template = useMemo(() => {
     if (!sessionId || !state) return undefined;
     const session = state.sessions[sessionId];
     if (!session?.templateId) return undefined;
     return state.templates[session.templateId];
-  }, [sessionId, state]);
+  }, [sessionId, state.sessions, state.templates]);
 
   const objectDefinitions = useMemo(() => {
     if (!template) return {};
@@ -77,8 +79,8 @@ const PlayerCard = ({
   const sessionCategories = useMemo(() => {
     if (!sessionId || !state) return [];
     const session = state.sessions[sessionId];
-    if (!session?.categoryIds) return [];
-    return session.categoryIds.map((id) => state.categories[id]).filter(Boolean);
+    if (!session) return [];
+    return getSessionTemplateCategories(state, session);
   }, [sessionId, state]);
 
   const groupedObjects = useMemo(() => {
@@ -126,11 +128,12 @@ const PlayerCard = ({
             {actionButtons.map((button) => {
               const templateCategoryName = categoryNameMap[button.categoryId];
               const templateCategoryKey = normalizeCategoryName(templateCategoryName);
+              // Match by template category ID (button.categoryId is a template category ID)
               const matchedCategory = sessionCategories.find((category) => {
-                if (category.id === button.categoryId) return true;
-                if (!templateCategoryKey) return false;
-                return normalizeCategoryName(category.name) === templateCategoryKey;
+                // Direct ID match (both are template category IDs now)
+                return category.id === button.categoryId;
               });
+              
               const isDisabled = !matchedCategory || (!allowNegative && actionMode === "subtract");
               return (
                 <button

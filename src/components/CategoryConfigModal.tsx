@@ -1,37 +1,51 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Modal from "./Modal";
 import FormulaEditor from "./FormulaEditor";
-import { Category, AppState } from "../state/types";
+import { CategoryTemplate, AppState } from "../state/types";
+import { getSessionTemplateCategories } from "../lib/templateApplication";
 
 const CategoryConfigModal = ({
   category,
   state,
+  sessionId,
   onClose,
   onSave,
 }: {
-  category: Category;
+  category: CategoryTemplate;
   state: AppState;
+  sessionId: string;
   onClose: () => void;
-  onSave: (category: Category) => void;
+  onSave: (category: CategoryTemplate) => void;
 }) => {
   const [displayType, setDisplayType] = useState<"sum" | "formula" | "weighted">(
     category.displayType ?? "sum"
   );
   const [weight, setWeight] = useState<string>(
-    (category.weight ?? 1.0).toString()
+    (category.defaultWeight ?? 1.0).toString()
   );
-  const [formula, setFormula] = useState(category.formula ?? "");
+  const [formula, setFormula] = useState(category.defaultFormula ?? "");
 
   const handleSave = () => {
-    const updated: Category = {
+    const updated: CategoryTemplate = {
       ...category,
       displayType,
-      weight: displayType === "weighted" ? parseFloat(weight) || 1.0 : undefined,
-      formula: displayType === "formula" ? formula.trim() || undefined : undefined,
+      defaultWeight: displayType === "weighted" ? parseFloat(weight) || 1.0 : undefined,
+      defaultFormula: displayType === "formula" ? formula.trim() || undefined : undefined,
     };
     onSave(updated);
     onClose();
   };
+
+  // Always get fresh template from state - don't cache it
+  const session = state.sessions[sessionId];
+  const template = useMemo(() => {
+    return session?.templateId ? state.templates[session.templateId] : undefined;
+  }, [session?.templateId, state.templates]);
+  
+  const templateCategories = useMemo(() => {
+    if (!session) return [];
+    return getSessionTemplateCategories(state, session);
+  }, [state.templates, session?.templateId, session?.categoryTemplateIds]);
 
   const weightValue = parseFloat(weight);
   const isValidWeight = !isNaN(weightValue) && weightValue > 0;
@@ -89,15 +103,12 @@ const CategoryConfigModal = ({
             <FormulaEditor
               formula={formula}
               onChange={setFormula}
-              categories={state.categories}
+              categories={templateCategories.reduce((acc, cat) => {
+                acc[cat.id] = { id: cat.id, name: cat.name, displayType: cat.displayType };
+                return acc;
+              }, {} as Record<string, { id: string; name: string; displayType: string }>)}
               categoryId={category.id}
-              objects={
-                (() => {
-                  const session = state.sessions[category.sessionId];
-                  const template = session?.templateId ? state.templates[session.templateId] : undefined;
-                  return template?.objectDefinitions || [];
-                })()
-              }
+              objects={template?.objectDefinitions || []}
             />
           </div>
         )}
