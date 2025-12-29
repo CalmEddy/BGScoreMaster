@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import Modal from "../components/Modal";
 import PlayerCard from "../components/PlayerCard";
 import { createId } from "../lib/id";
-import { computeCategoryTotals, computePlayerTotal, findWinners, getSessionEntries } from "../lib/calculations";
+import { computePlayerTotal, findWinners, getSessionEntries } from "../lib/calculations";
 import { getObjectValue } from "../lib/objectStorage";
 import { evaluateRules } from "../lib/ruleEngine";
 import { getSessionObjects } from "../lib/objectStorage";
